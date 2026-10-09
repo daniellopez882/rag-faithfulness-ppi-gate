@@ -29,6 +29,9 @@ def test_report_with_partial_labels_has_all_intervals() -> None:
     report = build_report(_scored(500, 100), artifact, confidence=0.9)
     methods = [iv.method for iv in report.rate.intervals]
     assert methods == ["classical", "ppi", "ppi++", "judge-only"]
+    assert all(
+        0.0 <= (iv.lower or 0.0) <= iv.estimate <= iv.upper <= 1.0 for iv in report.rate.intervals
+    )
     assert report.metrics is not None
     assert report.metrics.n == 100
     assert report.reliability_calibrated

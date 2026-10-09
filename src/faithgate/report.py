@@ -100,11 +100,16 @@ def rate_intervals(
             "classical, PPI and PPI++ cover the true rate at the stated level when the labelled "
             "responses are a uniform random subset of the batch; judge-only does not."
         )
+    # A rate lives in [0, 1]; clipping the displayed interval cannot change whether it covers.
+    clipped = [
+        iv.model_copy(update={"lower": max(0.0, iv.lower or 0.0), "upper": min(1.0, iv.upper)})
+        for iv in found
+    ]
     return RateBlock(
         confidence=confidence,
         n_labelled=int(labels.size),
         n_unlabelled=int(f_unlabelled.size),
-        intervals=found,
+        intervals=clipped,
         note=note,
     )
 

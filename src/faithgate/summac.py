@@ -50,17 +50,21 @@ class NLIMatrix:
         return [self.chunks[i] for i in self.probs.argmax(axis=1)]
 
 
+def layout(source: str, response: str, config: ChunkConfig) -> tuple[list[Segment], list[Segment]]:
+    """The response units (rows) and source chunks (columns) of the NLI matrix."""
+    return split_units(response, config.unit), chunk_source(
+        source, config.chunk_words, config.overlap
+    )
+
+
 def build_matrices(
     model: EntailmentModel, pairs: Sequence[tuple[str, str]], config: ChunkConfig
 ) -> list[NLIMatrix]:
     """NLI matrices for many (source, response) pairs, scored in one batched call."""
-    layouts: list[tuple[list[Segment], list[Segment]]] = []
-    flat: list[tuple[str, str]] = []
-    for source, response in pairs:
-        units = split_units(response, config.unit)
-        chunks = chunk_source(source, config.chunk_words, config.overlap)
-        layouts.append((units, chunks))
-        flat.extend((chunk.text, unit.text) for unit in units for chunk in chunks)
+    layouts = [layout(source, response, config) for source, response in pairs]
+    flat = [
+        (chunk.text, unit.text) for units, chunks in layouts for unit in units for chunk in chunks
+    ]
     probs = model.entail_probs(flat)
     matrices: list[NLIMatrix] = []
     offset = 0
