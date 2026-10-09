@@ -162,8 +162,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("score", help="score responses with a judge")
     p.add_argument("input", type=Path, help="JSONL with id, source, response[, label, task_type]")
     p.add_argument("-o", "--output", type=Path, required=True)
-    p.add_argument("--judge", choices=JUDGES, default="nli-zs-min")
-    p.add_argument("--unit", choices=("sentence", "claim"), default="sentence")
+    # Defaults follow the benchmark's dev slice (bench/results/full.json, chunk_selection):
+    # claim units against 25-word chunks, and zs-mean as the stronger zero-shot aggregation there.
+    p.add_argument("--judge", choices=JUDGES, default="nli-zs-mean")
+    p.add_argument("--unit", choices=("sentence", "claim"), default="claim")
     p.add_argument("--chunk-words", type=int, default=25)
     p.add_argument("--overlap", type=int, default=1)
     p.add_argument("--conv", type=Path, default=None, help="trained SummaC-Conv parameters")
