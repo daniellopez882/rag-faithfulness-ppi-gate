@@ -41,6 +41,19 @@ def test_report_with_partial_labels_has_all_intervals() -> None:
     assert "ppi++" in html
 
 
+def test_report_shows_llm_position_swap_consistency() -> None:
+    rows = [
+        Scored(id="a", judge="llm:scripted", score=1.0, consistent=True, label=1),
+        Scored(id="b", judge="llm:scripted", score=0.5, consistent=False, label=0),
+        Scored(id="c", judge="llm:scripted", score=0.0, consistent=True),
+        Scored(id="d", judge="llm:scripted", score=0.0, consistent=True),
+    ]
+    report = build_report(rows)
+    assert report.position_swap_consistency == 0.75
+    assert "Position-swap consistency" in render_html(report)
+    assert build_report(_scored(20, 5)).position_swap_consistency is None
+
+
 def test_report_without_labels_or_artifact() -> None:
     report = build_report(_scored(50, 0))
     assert [iv.method for iv in report.rate.intervals] == ["judge-only"]

@@ -19,7 +19,8 @@ from faithgate.calibration import (
     maximum_calibration_error,
     reliability_bins,
 )
-from faithgate.conformal import CRCThreshold
+from faithgate.conformal import CRCThreshold, flag
+from faithgate.judges import consistency_rate
 from faithgate.metrics import PRF, auroc, cohen_kappa, precision_recall_f1
 from faithgate.ppi import (
     Interval,
@@ -74,6 +75,7 @@ class Report(BaseModel):
     reliability_calibrated: list[ReliabilityBin]
     crc: CRCThreshold | None
     flagged: list[FlaggedRow]
+    position_swap_consistency: float | None = None
 
 
 def rate_intervals(
@@ -162,8 +164,8 @@ def build_report(
         cal_bins = reliability_bins(cal, labels, n_bins=10)
 
     flagged = []
-    for row, prob in zip(rows, probs, strict=True):
-        if prob >= threshold:
+    for row, prob, is_flagged in zip(rows, probs, flag(probs, threshold), strict=True):
+        if is_flagged:
             text, unit_score = _top_unit(row)
             flagged.append(
                 FlaggedRow(
@@ -183,6 +185,9 @@ def build_report(
         reliability_calibrated=cal_bins,
         crc=artifact.crc if artifact else None,
         flagged=flagged,
+        position_swap_consistency=(
+            consistency_rate(rows) if any(r.consistent is not None for r in rows) else None
+        ),
     )
 
 

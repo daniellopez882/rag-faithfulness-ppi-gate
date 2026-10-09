@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -65,10 +64,3 @@ def write_jsonl(path: Path, rows: Iterable[BaseModel]) -> int:
             handle.write("\n")
             count += 1
     return count
-
-
-def iter_json_lines(path: Path) -> Iterator[dict[str, object]]:
-    with path.open(encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                yield json.loads(line)

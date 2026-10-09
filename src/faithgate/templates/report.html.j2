@@ -34,6 +34,9 @@
 <main>
   <h1>Faithfulness report</h1>
   <p class="muted">Judge <strong>{{ report.judge }}</strong> &middot; {{ report.n }} responses, {{ report.n_labelled }} with a human label &middot; calibration: {{ report.calibration_method }} &middot; {{ report.created }}</p>
+  {% if report.position_swap_consistency is not none %}
+  <p class="muted">Position-swap consistency of the LLM judge: {{ '%.3f' % report.position_swap_consistency }} (share of responses whose verdict did not change when SOURCE and RESPONSE swapped places; the others score 0.5).</p>
+  {% endif %}
 
   <h2>Hallucination rate</h2>
   <p class="muted">{{ report.rate.note }}</p>

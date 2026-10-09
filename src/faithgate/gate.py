@@ -11,6 +11,7 @@ import numpy as np
 from pydantic import BaseModel, Field
 
 from faithgate.artifacts import CalibrationArtifact
+from faithgate.conformal import flag
 from faithgate.ppi import estimate_rate, interval
 from faithgate.records import Scored, read_jsonl
 
@@ -119,7 +120,8 @@ def evaluate(config: GateConfig) -> GateOutcome:
     responses: list[ResponseCheck] = []
     if config.per_response:
         threshold = artifact.crc.threshold if artifact else 0.5
-        for row, prob in zip(rows, probs, strict=True):
+        flagged = flag(probs, threshold)
+        for row, prob, is_flagged in zip(rows, probs, flagged, strict=True):
             worst = max(row.units, key=lambda u: u.score) if row.units else None
             text = row.response[worst.start : worst.end] if worst and row.response else None
             responses.append(
@@ -127,7 +129,7 @@ def evaluate(config: GateConfig) -> GateOutcome:
                     id=row.id,
                     probability=float(prob),
                     threshold=threshold,
-                    flagged=bool(prob >= threshold),
+                    flagged=bool(is_flagged),
                     unit_text=text,
                     unit_score=worst.score if worst else None,
                 )
