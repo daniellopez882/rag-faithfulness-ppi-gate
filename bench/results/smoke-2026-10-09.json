@@ -1,0 +1,1111 @@
+{
+  "profile": "smoke",
+  "profile_settings": {
+    "name": "smoke",
+    "dev_per_task": 4,
+    "calib_per_task": 12,
+    "test_per_task": 12,
+    "ppi_ns": [
+      12
+    ],
+    "ppi_reps": 100,
+    "crc_reps": 50,
+    "crc_n": 18,
+    "bootstrap": 50,
+    "throughput_n": 6,
+    "seed": 7
+  },
+  "date": "2026-10-09T13:08:27+00:00",
+  "command": "uv run python -m bench.run --profile smoke --out bench/results/smoke-2026-10-09.json",
+  "git_sha": "8f69b12e0c705049677bceddd0b99165ac93fe23",
+  "git_dirty": false,
+  "machine": {
+    "cpu": "Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz",
+    "logical_cores": 6,
+    "ram_gb": 11.9,
+    "os": "Windows-10-10.0.19045-SP0",
+    "python": "3.12.14",
+    "accelerator": "none (CPU only)",
+    "packages": {
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "onnxruntime": "1.31.0",
+      "tokenizers": "0.23.3",
+      "pydantic": "2.14.0",
+      "jinja2": "3.1.6",
+      "huggingface-hub": "2.2.0"
+    }
+  },
+  "dataset": {
+    "name": "RAGTruth",
+    "commit": "c103204b9ce28d6bbad859304bf30de72b8ed8fe",
+    "licence": "MIT (ParticleMedia/RAGTruth)",
+    "dev_n": 12,
+    "calib_n": 36,
+    "calib_positive_rate": 0.3611111111111111,
+    "test_n": 36,
+    "test_positive_rate": 0.3888888888888889
+  },
+  "model": {
+    "repo": "MoritzLaurer/xtremedistil-l6-h256-zeroshot-v1.1-all-33",
+    "revision": "c07f66d9cbf781191bee66edfe8ad7856f045781",
+    "licence": "MIT"
+  },
+  "timings_seconds": {
+    "load": 1.9,
+    "chunk_selection": 15.2,
+    "nli_scoring": 24.6,
+    "meta_eval": 0.6,
+    "spans": 0.2,
+    "agreement": 0.0,
+    "ppi": 0.3,
+    "crc": 0.0,
+    "throughput": 2.5,
+    "total": 45.3
+  },
+  "chunk_selection": {
+    "dev_n": 12,
+    "grid": [
+      {
+        "config": "sentence-w25-o1",
+        "auroc_zs-mean": 0.78125,
+        "auroc_zs-min": 0.65625,
+        "pairs_per_response": 221.5
+      },
+      {
+        "config": "sentence-w60-o1",
+        "auroc_zs-mean": 0.8125,
+        "auroc_zs-min": 0.46875,
+        "pairs_per_response": 105.0
+      }
+    ],
+    "chosen": "sentence-w60-o1",
+    "criterion": "max dev AUROC"
+  },
+  "dev_auroc": {
+    "nli-zs-mean": 0.8125,
+    "nli-zs-min": 0.46875,
+    "nli-conv-mean": 0.5,
+    "nli-conv-max": 0.40625
+  },
+  "primary_judge": "nli-zs-mean",
+  "conv": {
+    "nli-conv-mean": {
+      "n_train": 36,
+      "weights": [
+        0.12872981390066485,
+        1.1383258736877202,
+        -2.474897084084593,
+        -0.45488705700078613,
+        0.5860826103896043,
+        0.15297708461528428,
+        -2.063261654361345,
+        4.034714347674809,
+        -3.41287565290494,
+        -0.4553665823028253,
+        2.2581018018583863,
+        0.09937616457695014,
+        1.0882149525053266,
+        -1.7758625293353512,
+        -4.229214454430155,
+        1.0423189348201385,
+        -0.8924634611412129,
+        -3.0262893237498028,
+        -0.08374763237749884,
+        -1.6031218598830916
+      ],
+      "bias": -0.4645380655361267
+    },
+    "nli-conv-max": {
+      "n_train": 36,
+      "weights": [
+        0.03789453227706174,
+        1.4300389066069976,
+        -3.906153726531767,
+        -2.376170480326021,
+        0.7915966400288547,
+        -2.0925823476938206,
+        0.8236172577855585,
+        3.1980351945353194,
+        0.22244923146306372,
+        -3.4674882830500913,
+        1.5669049367012382,
+        -1.3741490904309177,
+        -0.7476272007730962,
+        -2.941767400060171,
+        -0.5329320609294738,
+        1.433931113245456,
+        -0.02362333687018374,
+        0.35152096728847537,
+        -1.4275999963224026,
+        1.3538925061074063
+      ],
+      "bias": -4.46152364399549
+    }
+  },
+  "meta_eval": {
+    "nli-zs-mean": {
+      "auroc": 0.827922077922078,
+      "auroc_ci95": {
+        "estimate": 0.827922077922078,
+        "lower": 0.6872643849206349,
+        "upper": 0.9618026523597176,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "uncalibrated_at_0.5": {
+        "precision": 0.7,
+        "recall": 0.5,
+        "f1": 0.5833333333333334
+      },
+      "tuned_threshold": 0.4799444285714286,
+      "at_tuned_threshold": {
+        "precision": 0.7,
+        "recall": 0.5,
+        "f1": 0.5833333333333334
+      },
+      "f1_at_tuned_threshold_ci95": {
+        "estimate": 0.5833333333333334,
+        "lower": 0.3848631239935589,
+        "upper": 0.7795986622073577,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "ece_raw": 0.20317928550284592,
+      "mce_raw": 0.3704983744588744,
+      "brier_raw": 0.1863321072881569,
+      "calibrated": {
+        "platt": {
+          "ece": 0.255195605653515,
+          "mce": 0.5623047167274953,
+          "brier": 0.19639640889862106,
+          "at_0.5": {
+            "precision": 0.75,
+            "recall": 0.21428571428571427,
+            "f1": 0.3333333333333333
+          }
+        },
+        "isotonic": {
+          "ece": 0.1581982332828393,
+          "mce": 0.6666666666666667,
+          "brier": 0.19188860178051786,
+          "at_0.5": {
+            "precision": 0.7,
+            "recall": 0.5,
+            "f1": 0.5833333333333334
+          }
+        },
+        "temperature": {
+          "ece": 0.2959474177291301,
+          "mce": 0.5059488318337244,
+          "brier": 0.183118831237189,
+          "at_0.5": {
+            "precision": 0.7,
+            "recall": 0.5,
+            "f1": 0.5833333333333334
+          }
+        },
+        "histogram": {
+          "ece": 0.11805555555555555,
+          "mce": 0.25,
+          "brier": 0.19270833333333334,
+          "at_0.5": {
+            "precision": 0.6923076923076923,
+            "recall": 0.6428571428571429,
+            "f1": 0.6666666666666666
+          }
+        }
+      },
+      "per_task": {
+        "QA": {
+          "n": 12,
+          "positive_rate": 0.25,
+          "auroc": 0.7407407407407407,
+          "f1_at_tuned_threshold": 0.6666666666666666,
+          "ece_raw": 0.25463896136363634,
+          "ece_isotonic_global": 0.05563736013070879,
+          "f1_isotonic_global_at_0.5": 0.6666666666666666
+        },
+        "Summary": {
+          "n": 12,
+          "positive_rate": 0.08333333333333333,
+          "auroc": 0.7272727272727273,
+          "f1_at_tuned_threshold": 0.0,
+          "ece_raw": 0.29363770622294366,
+          "ece_isotonic_global": 0.22869004052081507,
+          "f1_isotonic_global_at_0.5": 0.0
+        },
+        "Data2txt": {
+          "n": 12,
+          "positive_rate": 0.8333333333333334,
+          "auroc": 1.0,
+          "f1_at_tuned_threshold": 0.6666666666666666,
+          "ece_raw": 0.46485224725529095,
+          "ece_isotonic_global": 0.46719037612007097,
+          "f1_isotonic_global_at_0.5": 0.6666666666666666
+        }
+      },
+      "isotonic_per_task": {
+        "ece": 0.1898148148148148,
+        "brier": 0.17502572016460907,
+        "at_0.5": {
+          "precision": 0.9,
+          "recall": 0.6428571428571429,
+          "f1": 0.75
+        },
+        "per_task": {
+          "QA": {
+            "ece_isotonic_per_task": 0.16666666666666669
+          },
+          "Summary": {
+            "ece_isotonic_per_task": 0.02777777777777779
+          },
+          "Data2txt": {
+            "ece_isotonic_per_task": 0.375
+          }
+        }
+      }
+    },
+    "nli-zs-min": {
+      "auroc": 0.6818181818181818,
+      "auroc_ci95": {
+        "estimate": 0.6818181818181818,
+        "lower": 0.5143915001407261,
+        "upper": 0.8213131313131313,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "uncalibrated_at_0.5": {
+        "precision": 0.4482758620689655,
+        "recall": 0.9285714285714286,
+        "f1": 0.6046511627906977
+      },
+      "tuned_threshold": 0.915769,
+      "at_tuned_threshold": {
+        "precision": 0.5,
+        "recall": 0.7142857142857143,
+        "f1": 0.588235294117647
+      },
+      "f1_at_tuned_threshold_ci95": {
+        "estimate": 0.588235294117647,
+        "lower": 0.40843750000000006,
+        "upper": 0.7123949579831933,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "ece_raw": 0.4430625,
+      "mce_raw": 0.7579675,
+      "brier_raw": 0.38960161780505564,
+      "calibrated": {
+        "platt": {
+          "ece": 0.1332935949094759,
+          "mce": 0.29314526669392826,
+          "brier": 0.2123033934769015,
+          "at_0.5": {
+            "precision": 0.5,
+            "recall": 0.2857142857142857,
+            "f1": 0.36363636363636365
+          }
+        },
+        "isotonic": {
+          "ece": 0.118189342865965,
+          "mce": 0.33333333333333337,
+          "brier": 0.23284061167257405,
+          "at_0.5": {
+            "precision": 0.5,
+            "recall": 0.7142857142857143,
+            "f1": 0.588235294117647
+          }
+        },
+        "temperature": {
+          "ece": 0.14234178527753938,
+          "mce": 0.45842301725017254,
+          "brier": 0.24626712198863515,
+          "at_0.5": {
+            "precision": 0.4482758620689655,
+            "recall": 0.9285714285714286,
+            "f1": 0.6046511627906977
+          }
+        },
+        "histogram": {
+          "ece": 0.15277777777777776,
+          "mce": 0.35,
+          "brier": 0.24614197530864196,
+          "at_0.5": {
+            "precision": 0.5,
+            "recall": 0.6428571428571429,
+            "f1": 0.5625000000000001
+          }
+        }
+      },
+      "per_task": {
+        "QA": {
+          "n": 12,
+          "positive_rate": 0.25,
+          "auroc": 0.5555555555555556,
+          "f1_at_tuned_threshold": 0.28571428571428575,
+          "ece_raw": 0.55046675,
+          "ece_isotonic_global": 0.17136752136752134,
+          "f1_isotonic_global_at_0.5": 0.28571428571428575
+        },
+        "Summary": {
+          "n": 12,
+          "positive_rate": 0.08333333333333333,
+          "auroc": 0.5454545454545454,
+          "f1_at_tuned_threshold": 0.2222222222222222,
+          "ece_raw": 0.6902764166666666,
+          "ece_isotonic_global": 0.34438134715912494,
+          "f1_isotonic_global_at_0.5": 0.2222222222222222
+        },
+        "Data2txt": {
+          "n": 12,
+          "positive_rate": 0.8333333333333334,
+          "auroc": 0.9,
+          "f1_at_tuned_threshold": 0.888888888888889,
+          "ece_raw": 0.13555083333333334,
+          "ece_isotonic_global": 0.3824089036609923,
+          "f1_isotonic_global_at_0.5": 0.888888888888889
+        }
+      },
+      "isotonic_per_task": {
+        "ece": 0.19430102091188892,
+        "brier": 0.20648948939111067,
+        "at_0.5": {
+          "precision": 0.6666666666666666,
+          "recall": 0.7142857142857143,
+          "f1": 0.689655172413793
+        },
+        "per_task": {
+          "QA": {
+            "ece_isotonic_per_task": 0.15976127109776625
+          },
+          "Summary": {
+            "ece_isotonic_per_task": 0.2945703630664718
+          },
+          "Data2txt": {
+            "ece_isotonic_per_task": 0.2
+          }
+        }
+      }
+    },
+    "nli-conv-mean": {
+      "auroc": 0.4967532467532468,
+      "auroc_ci95": {
+        "estimate": 0.4967532467532468,
+        "lower": 0.3395544672718586,
+        "upper": 0.6536631194892064,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "uncalibrated_at_0.5": {
+        "precision": 0.38461538461538464,
+        "recall": 0.35714285714285715,
+        "f1": 0.3703703703703704
+      },
+      "tuned_threshold": 0.41291122041076517,
+      "at_tuned_threshold": {
+        "precision": 0.3125,
+        "recall": 0.35714285714285715,
+        "f1": 0.3333333333333333
+      },
+      "f1_at_tuned_threshold_ci95": {
+        "estimate": 0.3333333333333333,
+        "lower": 0.15673076923076923,
+        "upper": 0.4697058823529412,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "ece_raw": 0.42867641584018007,
+      "mce_raw": 0.9512496456700221,
+      "brier_raw": 0.32831056537476416,
+      "calibrated": {
+        "platt": {
+          "ece": 0.4448484310728733,
+          "mce": 0.9903049666399059,
+          "brier": 0.37088763266960334,
+          "at_0.5": {
+            "precision": 0.3333333333333333,
+            "recall": 0.35714285714285715,
+            "f1": 0.3448275862068965
+          }
+        },
+        "isotonic": {
+          "ece": 0.5477775495853324,
+          "mce": 0.662595911900173,
+          "brier": 0.5316913811578298,
+          "at_0.5": {
+            "precision": 0.3125,
+            "recall": 0.35714285714285715,
+            "f1": 0.3333333333333333
+          }
+        },
+        "temperature": {
+          "ece": 0.4852903880784765,
+          "mce": 0.9269104345898924,
+          "brier": 0.4227639983156352,
+          "at_0.5": {
+            "precision": 0.38461538461538464,
+            "recall": 0.35714285714285715,
+            "f1": 0.3703703703703704
+          }
+        },
+        "histogram": {
+          "ece": 0.525462962962963,
+          "mce": 0.6666666666666667,
+          "brier": 0.5113811728395061,
+          "at_0.5": {
+            "precision": 0.3333333333333333,
+            "recall": 0.35714285714285715,
+            "f1": 0.3448275862068965
+          }
+        }
+      },
+      "per_task": {
+        "QA": {
+          "n": 12,
+          "positive_rate": 0.25,
+          "auroc": 0.1111111111111111,
+          "f1_at_tuned_threshold": 0.0,
+          "ece_raw": 0.5694956474756377,
+          "ece_isotonic_global": 0.7083333333333334,
+          "f1_isotonic_global_at_0.5": 0.0
+        },
+        "Summary": {
+          "n": 12,
+          "positive_rate": 0.08333333333333333,
+          "auroc": 0.09090909090909091,
+          "f1_at_tuned_threshold": 0.0,
+          "ece_raw": 0.4024151970021817,
+          "ece_isotonic_global": 0.5226893343196605,
+          "f1_isotonic_global_at_0.5": 0.0
+        },
+        "Data2txt": {
+          "n": 12,
+          "positive_rate": 0.8333333333333334,
+          "auroc": 1.0,
+          "f1_at_tuned_threshold": 0.6666666666666666,
+          "ece_raw": 0.4615379206275334,
+          "ece_isotonic_global": 0.41230998110300315,
+          "f1_isotonic_global_at_0.5": 0.6666666666666666
+        }
+      },
+      "isotonic_per_task": {
+        "ece": 0.5228771841575865,
+        "brier": 0.4926528871750404,
+        "at_0.5": {
+          "precision": 0.3333333333333333,
+          "recall": 0.35714285714285715,
+          "f1": 0.3448275862068965
+        },
+        "per_task": {
+          "QA": {
+            "ece_isotonic_per_task": 0.75
+          },
+          "Summary": {
+            "ece_isotonic_per_task": 0.401964885806093
+          },
+          "Data2txt": {
+            "ece_isotonic_per_task": 0.4166666666666667
+          }
+        }
+      }
+    },
+    "nli-conv-max": {
+      "auroc": 0.37012987012987014,
+      "auroc_ci95": {
+        "estimate": 0.37012987012987014,
+        "lower": 0.1962841041021672,
+        "upper": 0.5315586587325717,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "uncalibrated_at_0.5": {
+        "precision": 0.2222222222222222,
+        "recall": 0.14285714285714285,
+        "f1": 0.17391304347826086
+      },
+      "tuned_threshold": 0.5698998831604151,
+      "at_tuned_threshold": {
+        "precision": 0.14285714285714285,
+        "recall": 0.07142857142857142,
+        "f1": 0.09523809523809523
+      },
+      "f1_at_tuned_threshold_ci95": {
+        "estimate": 0.09523809523809523,
+        "lower": 0.0,
+        "upper": 0.2584239130434782,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "ece_raw": 0.36316623462154796,
+      "mce_raw": 0.6347883516967099,
+      "brier_raw": 0.362162170731404,
+      "calibrated": {
+        "platt": {
+          "ece": 0.3539633794406518,
+          "mce": 0.6363796773036827,
+          "brier": 0.3671804921890036,
+          "at_0.5": {
+            "precision": 0.2222222222222222,
+            "recall": 0.14285714285714285,
+            "f1": 0.17391304347826086
+          }
+        },
+        "isotonic": {
+          "ece": 0.32090595186190957,
+          "mce": 0.6666666666666667,
+          "brier": 0.37757995583171566,
+          "at_0.5": {
+            "precision": 0.14285714285714285,
+            "recall": 0.07142857142857142,
+            "f1": 0.09523809523809523
+          }
+        },
+        "temperature": {
+          "ece": 0.44004557203490424,
+          "mce": 0.7063761907462381,
+          "brier": 0.39962432990015173,
+          "at_0.5": {
+            "precision": 0.2222222222222222,
+            "recall": 0.14285714285714285,
+            "f1": 0.17391304347826086
+          }
+        },
+        "histogram": {
+          "ece": 0.29629629629629634,
+          "mce": 0.6666666666666667,
+          "brier": 0.3827160493827161,
+          "at_0.5": {
+            "precision": 0.2,
+            "recall": 0.07142857142857142,
+            "f1": 0.10526315789473682
+          }
+        }
+      },
+      "per_task": {
+        "QA": {
+          "n": 12,
+          "positive_rate": 0.25,
+          "auroc": 0.2962962962962963,
+          "f1_at_tuned_threshold": 0.0,
+          "ece_raw": 0.4369306299347693,
+          "ece_isotonic_global": 0.35,
+          "f1_isotonic_global_at_0.5": 0.0
+        },
+        "Summary": {
+          "n": 12,
+          "positive_rate": 0.08333333333333333,
+          "auroc": 0.0,
+          "f1_at_tuned_threshold": 0.0,
+          "ece_raw": 0.4571670069765612,
+          "ece_isotonic_global": 0.423651045625912,
+          "f1_isotonic_global_at_0.5": 0.0
+        },
+        "Data2txt": {
+          "n": 12,
+          "positive_rate": 0.8333333333333334,
+          "auroc": 0.4,
+          "f1_at_tuned_threshold": 0.18181818181818182,
+          "ece_raw": 0.5617039717971306,
+          "ece_isotonic_global": 0.5109331900401832,
+          "f1_isotonic_global_at_0.5": 0.18181818181818182
+        }
+      },
+      "isotonic_per_task": {
+        "ece": 0.38495818972319523,
+        "brier": 0.40657134965611125,
+        "at_0.5": {
+          "precision": 0.4117647058823529,
+          "recall": 0.5,
+          "f1": 0.45161290322580644
+        },
+        "per_task": {
+          "QA": {
+            "ece_isotonic_per_task": 0.4583333333333333
+          },
+          "Summary": {
+            "ece_isotonic_per_task": 0.3215412358362525
+          },
+          "Data2txt": {
+            "ece_isotonic_per_task": 0.45833333333333337
+          }
+        }
+      }
+    },
+    "overlap": {
+      "auroc": 0.9967532467532467,
+      "auroc_ci95": {
+        "estimate": 0.9967532467532467,
+        "lower": 0.9800650436520002,
+        "upper": 1.0,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "uncalibrated_at_0.5": {
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": 0.6666666666666666
+      },
+      "tuned_threshold": 0.41904761904761906,
+      "at_tuned_threshold": {
+        "precision": 1.0,
+        "recall": 0.8571428571428571,
+        "f1": 0.923076923076923
+      },
+      "f1_at_tuned_threshold_ci95": {
+        "estimate": 0.923076923076923,
+        "lower": 0.7898550724637682,
+        "upper": 1.0,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "ece_raw": 0.2585173812182343,
+      "mce_raw": 0.5659865134865135,
+      "brier_raw": 0.12103240041437305,
+      "calibrated": {
+        "platt": {
+          "ece": 0.19933431448385489,
+          "mce": 0.49879207214382715,
+          "brier": 0.0744579974363772,
+          "at_0.5": {
+            "precision": 1.0,
+            "recall": 0.9285714285714286,
+            "f1": 0.962962962962963
+          }
+        },
+        "isotonic": {
+          "ece": 0.0696837231954282,
+          "mce": 0.6078334753888768,
+          "brier": 0.04037229404111743,
+          "at_0.5": {
+            "precision": 1.0,
+            "recall": 0.8571428571428571,
+            "f1": 0.923076923076923
+          }
+        },
+        "temperature": {
+          "ece": 0.2191554638128107,
+          "mce": 0.6261219614326644,
+          "brier": 0.11147857248824256,
+          "at_0.5": {
+            "precision": 1.0,
+            "recall": 0.5,
+            "f1": 0.6666666666666666
+          }
+        },
+        "histogram": {
+          "ece": 0.046296296296296294,
+          "mce": 0.25,
+          "brier": 0.05632716049382716,
+          "at_0.5": {
+            "precision": 0.9230769230769231,
+            "recall": 0.8571428571428571,
+            "f1": 0.888888888888889
+          }
+        }
+      },
+      "per_task": {
+        "QA": {
+          "n": 12,
+          "positive_rate": 0.25,
+          "auroc": 1.0,
+          "f1_at_tuned_threshold": 0.8,
+          "ece_raw": 0.2325034043176484,
+          "ece_isotonic_global": 0.07627638684339716,
+          "f1_isotonic_global_at_0.5": 0.8
+        },
+        "Summary": {
+          "n": 12,
+          "positive_rate": 0.08333333333333333,
+          "auroc": 1.0,
+          "f1_at_tuned_threshold": 1.0,
+          "ece_raw": 0.20364667401140507,
+          "ece_isotonic_global": 0.06128865979381443,
+          "f1_isotonic_global_at_0.5": 1.0
+        },
+        "Data2txt": {
+          "n": 12,
+          "positive_rate": 0.8333333333333334,
+          "auroc": 1.0,
+          "f1_at_tuned_threshold": 0.9473684210526316,
+          "ece_raw": 0.44688998803096347,
+          "ece_isotonic_global": 0.15481945628240643,
+          "f1_isotonic_global_at_0.5": 0.9473684210526316
+        }
+      },
+      "isotonic_per_task": {
+        "ece": 0.08667599917126295,
+        "brier": 0.05421692195493482,
+        "at_0.5": {
+          "precision": 1.0,
+          "recall": 0.8571428571428571,
+          "f1": 0.923076923076923
+        },
+        "per_task": {
+          "QA": {
+            "ece_isotonic_per_task": 0.08819681373263738
+          },
+          "Summary": {
+            "ece_isotonic_per_task": 0.14143951001170763
+          },
+          "Data2txt": {
+            "ece_isotonic_per_task": 0.0970583404361105
+          }
+        }
+      }
+    },
+    "always-hallucinated": {
+      "auroc": 0.5,
+      "auroc_ci95": {
+        "estimate": 0.5,
+        "lower": 0.5,
+        "upper": 0.5,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "uncalibrated_at_0.5": {
+        "precision": 0.3888888888888889,
+        "recall": 1.0,
+        "f1": 0.56
+      },
+      "tuned_threshold": 1.0,
+      "at_tuned_threshold": {
+        "precision": 0.3888888888888889,
+        "recall": 1.0,
+        "f1": 0.56
+      },
+      "f1_at_tuned_threshold_ci95": {
+        "estimate": 0.56,
+        "lower": 0.4347826086956522,
+        "upper": 0.6666666666666666,
+        "level": 0.95,
+        "n_resamples": 50
+      },
+      "ece_raw": 0.6111111111111112,
+      "mce_raw": 0.6111111111111112,
+      "brier_raw": 0.6111111111111112,
+      "calibrated": {},
+      "per_task": {
+        "QA": {
+          "n": 12,
+          "positive_rate": 0.25,
+          "auroc": 0.5,
+          "f1_at_tuned_threshold": 0.4,
+          "ece_raw": 0.75
+        },
+        "Summary": {
+          "n": 12,
+          "positive_rate": 0.08333333333333333,
+          "auroc": 0.5,
+          "f1_at_tuned_threshold": 0.15384615384615385,
+          "ece_raw": 0.9166666666666666
+        },
+        "Data2txt": {
+          "n": 12,
+          "positive_rate": 0.8333333333333334,
+          "auroc": 0.5,
+          "f1_at_tuned_threshold": 0.9090909090909091,
+          "ece_raw": 0.16666666666666663
+        }
+      }
+    }
+  },
+  "spans": {
+    "nli-zs-mean (whole unit)": {
+      "unit_threshold": 0.9,
+      "calib_f1": 0.2209880152002338,
+      "precision": 0.03265741728922092,
+      "recall": 0.09592476489028214,
+      "f1": 0.048726114649681525,
+      "predicted_chars": 4685,
+      "gold_chars": 1595,
+      "overlap_chars": 153,
+      "per_task_f1": {
+        "QA": 0.0,
+        "Summary": 0.0,
+        "Data2txt": 0.10003269042170644
+      }
+    },
+    "nli-zs-mean (source-absent words in flagged units)": {
+      "unit_threshold": 0.9,
+      "calib_f1": 0.21833449965010496,
+      "precision": 0.04923599320882852,
+      "recall": 0.05454545454545454,
+      "f1": 0.05175490779298037,
+      "predicted_chars": 1767,
+      "gold_chars": 1595,
+      "overlap_chars": 87,
+      "per_task_f1": {
+        "QA": 0.0,
+        "Summary": 0.0,
+        "Data2txt": 0.0925531914893617
+      }
+    },
+    "overlap (unsupported word runs)": {
+      "unit_threshold": 0.8,
+      "calib_f1": 0.3834439672003124,
+      "precision": 0.04537521815008726,
+      "recall": 0.03260188087774295,
+      "f1": 0.0379423568040861,
+      "predicted_chars": 1146,
+      "gold_chars": 1595,
+      "overlap_chars": 52,
+      "per_task_f1": {
+        "QA": 0.0,
+        "Summary": 0.0,
+        "Data2txt": 0.06544996853366897
+      }
+    },
+    "always-hallucinated (whole response)": {
+      "precision": 0.057213573427075115,
+      "recall": 1.0,
+      "f1": 0.10823465544735861,
+      "predicted_chars": 27878,
+      "gold_chars": 1595,
+      "overlap_chars": 1595
+    }
+  },
+  "agreement": {
+    "decision_rule": "score >= F1-optimal threshold chosen on the calibration split",
+    "cohen_kappa_vs_human": {
+      "overlap": 0.8799999999999999,
+      "nli-zs-mean": 0.3835616438356164,
+      "nli-zs-min": 0.24096385542168683,
+      "nli-conv-mean": -0.1392405063291141,
+      "nli-conv-max": -0.22142857142857136
+    },
+    "krippendorff_alpha_human_and_judges": 0.1060704056176659,
+    "krippendorff_alpha_judges_only": 0.04214046822742479
+  },
+  "ppi": {
+    "pool_n": 36,
+    "true_rate": 0.3888888888888889,
+    "alpha_two_sided": 0.1,
+    "alpha_upper": 0.05,
+    "nominal_coverage_two_sided": 0.9,
+    "nominal_coverage_upper": 0.95,
+    "reps": 100,
+    "by_judge": {
+      "nli-zs-mean (isotonic)": {
+        "12": {
+          "classical": {
+            "coverage": 0.91,
+            "mean_width": 0.46952822126659854,
+            "upper_coverage": 0.95,
+            "mean_upper_bound": 0.6214307772999657
+          },
+          "ppi": {
+            "coverage": 0.97,
+            "mean_width": 0.4304621801476323,
+            "upper_coverage": 0.97,
+            "mean_upper_bound": 0.6067692352335207,
+            "mean_lambda": 1.0
+          },
+          "ppi++": {
+            "coverage": 0.96,
+            "mean_width": 0.41464501692906125,
+            "upper_coverage": 0.97,
+            "mean_upper_bound": 0.5894036895913325,
+            "mean_lambda": 0.6833062636728614
+          },
+          "judge-only": {
+            "coverage": 0.0,
+            "mean_width": 0.14003140895023614,
+            "upper_coverage": 0.0,
+            "mean_upper_bound": 0.32416109441865076
+          },
+          "classical_equivalent_labels_ppi++": 15.38692180661491
+        }
+      },
+      "nli-zs-mean (raw score)": {
+        "12": {
+          "classical": {
+            "coverage": 0.91,
+            "mean_width": 0.46952822126659854,
+            "upper_coverage": 0.95,
+            "mean_upper_bound": 0.6214307772999657
+          },
+          "ppi": {
+            "coverage": 0.96,
+            "mean_width": 0.4298129827842347,
+            "upper_coverage": 0.97,
+            "mean_upper_bound": 0.6023048230708842,
+            "mean_lambda": 1.0
+          },
+          "ppi++": {
+            "coverage": 0.94,
+            "mean_width": 0.4260563158129626,
+            "upper_coverage": 0.96,
+            "mean_upper_bound": 0.6070337609310522,
+            "mean_lambda": 0.9363622372189897
+          },
+          "judge-only": {
+            "coverage": 1.0,
+            "mean_width": 0.0937295260788487,
+            "upper_coverage": 1.0,
+            "mean_upper_bound": 0.44748480691969517
+          },
+          "classical_equivalent_labels_ppi++": 14.573727090694785
+        }
+      },
+      "overlap (isotonic)": {
+        "12": {
+          "classical": {
+            "coverage": 0.91,
+            "mean_width": 0.46952822126659854,
+            "upper_coverage": 0.95,
+            "mean_upper_bound": 0.6214307772999657
+          },
+          "ppi": {
+            "coverage": 1.0,
+            "mean_width": 0.3235705562003581,
+            "upper_coverage": 1.0,
+            "mean_upper_bound": 0.5533385783609664,
+            "mean_lambda": 1.0
+          },
+          "ppi++": {
+            "coverage": 0.99,
+            "mean_width": 0.3067962382951548,
+            "upper_coverage": 0.99,
+            "mean_upper_bound": 0.5312465129168827,
+            "mean_lambda": 0.7731854220847488
+          },
+          "judge-only": {
+            "coverage": 1.0,
+            "mean_width": 0.21619610363390993,
+            "upper_coverage": 1.0,
+            "mean_upper_bound": 0.4411921063993047
+          },
+          "classical_equivalent_labels_ppi++": 28.10635887490937
+        }
+      }
+    }
+  },
+  "crc": {
+    "rows": [
+      {
+        "risk": "slip",
+        "alpha": 0.05,
+        "calibrated_on_train": {
+          "threshold": 0.07692307692307693,
+          "test_risk": 0.0,
+          "test_flag_rate": 0.8888888888888888
+        },
+        "resampled_within_test": {
+          "n_calibration": 18,
+          "n_evaluation": 18,
+          "reps": 50,
+          "mean_risk": 0.0,
+          "sd_risk": 0.0,
+          "mean_flag_rate": 1.0
+        }
+      },
+      {
+        "risk": "slip",
+        "alpha": 0.1,
+        "calibrated_on_train": {
+          "threshold": 0.5,
+          "test_risk": 0.19444444444444445,
+          "test_flag_rate": 0.2777777777777778
+        },
+        "resampled_within_test": {
+          "n_calibration": 18,
+          "n_evaluation": 18,
+          "reps": 50,
+          "mean_risk": 0.008888888888888889,
+          "sd_risk": 0.043546484316145384,
+          "mean_flag_rate": 0.8611111111111112
+        }
+      },
+      {
+        "risk": "slip",
+        "alpha": 0.2,
+        "calibrated_on_train": {
+          "threshold": 0.6,
+          "test_risk": 0.19444444444444445,
+          "test_flag_rate": 0.2777777777777778
+        },
+        "resampled_within_test": {
+          "n_calibration": 18,
+          "n_evaluation": 18,
+          "reps": 50,
+          "mean_risk": 0.09444444444444444,
+          "sd_risk": 0.10015420209622192,
+          "mean_flag_rate": 0.5844444444444445
+        }
+      },
+      {
+        "risk": "miss",
+        "alpha": 0.05,
+        "calibrated_on_train": {
+          "threshold": -Infinity,
+          "test_risk": 0.0,
+          "test_flag_rate": 1.0
+        },
+        "resampled_within_test": {
+          "n_calibration": 18,
+          "n_evaluation": 18,
+          "reps": 50,
+          "mean_risk": 0.0,
+          "sd_risk": 0.0,
+          "mean_flag_rate": 1.0
+        }
+      },
+      {
+        "risk": "miss",
+        "alpha": 0.1,
+        "calibrated_on_train": {
+          "threshold": 0.07692307692307693,
+          "test_risk": 0.0,
+          "test_flag_rate": 0.8888888888888888
+        },
+        "resampled_within_test": {
+          "n_calibration": 18,
+          "n_evaluation": 18,
+          "reps": 50,
+          "mean_risk": 0.0,
+          "sd_risk": 0.0,
+          "mean_flag_rate": 0.9611111111111111
+        }
+      },
+      {
+        "risk": "miss",
+        "alpha": 0.2,
+        "calibrated_on_train": {
+          "threshold": 0.3333333333333333,
+          "test_risk": 0.2857142857142857,
+          "test_flag_rate": 0.3888888888888889
+        },
+        "resampled_within_test": {
+          "n_calibration": 18,
+          "n_evaluation": 18,
+          "reps": 50,
+          "mean_risk": 0.027777777777777776,
+          "sd_risk": 0.11013459778666114,
+          "mean_flag_rate": 0.8422222222222221
+        }
+      }
+    ],
+    "judge": "nli-zs-mean (isotonic)"
+  },
+  "throughput": {
+    "nli": {
+      "responses": 6,
+      "seconds": 1.6841383999562822,
+      "responses_per_second": 3.562652570688817,
+      "nli_pairs_per_second": 201.28987024391816,
+      "mean_pairs_per_response": 56.5,
+      "config": "sentence-w60-o1"
+    },
+    "overlap": {
+      "responses": 36,
+      "seconds": 0.03568550001364201,
+      "responses_per_second": 1008.8131029756556
+    }
+  },
+  "llm_judge": {
+    "status": "not run",
+    "reason": "needs an OpenAI-compatible endpoint; the adapter and the position-swap check are covered by tests with a scripted provider only"
+  },
+  "reliability_figure": "smoke-2026-10-09-reliability.svg"
+}
