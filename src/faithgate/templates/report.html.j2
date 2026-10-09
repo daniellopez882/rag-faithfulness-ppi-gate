@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faithfulness report</title>
+<style>
+  :root { --bg: #fbfbf9; --fg: #1d1f21; --muted: #6a6f75; --line: #d9dbd6; --raw: #9aa0a6; --cal: #2f6f9f; --bad: #a23b2a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17191b; --fg: #e6e6e3; --muted: #9ba1a6; --line: #34383c; --raw: #7d8388; --cal: #6fa8d6; --bad: #e07a66; }
+  }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 24px 16px; }
+  main { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 28px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  .muted { color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; }
+  .num { text-align: right; }
+  .grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  .frame { fill: none; stroke: var(--line); }
+  .diag { stroke: var(--muted); stroke-dasharray: 4 4; }
+  .tick, .axis { fill: var(--muted); font-size: 11px; }
+  .line { fill: none; stroke-width: 1.5; }
+  .line.raw { stroke: var(--raw); } .line.cal { stroke: var(--cal); }
+  .dot.raw { fill: var(--raw); } .dot.cal { fill: var(--cal); }
+  .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 6px 0 12px; }
+  .flag { color: var(--bad); }
+  .wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Faithfulness report</h1>
+  <p class="muted">Judge <strong>{{ report.judge }}</strong> &middot; {{ report.n }} responses, {{ report.n_labelled }} with a human label &middot; calibration: {{ report.calibration_method }} &middot; {{ report.created }}</p>
+
+  <h2>Hallucination rate</h2>
+  <p class="muted">{{ report.rate.note }}</p>
+  <div class="wrap"><table>
+    <tr><th>estimator</th><th class="num">estimate</th><th class="num">{{ '%.0f' % (report.rate.confidence * 100) }}% interval</th><th class="num">width</th><th class="num">&lambda;</th></tr>
+    {% for iv in report.rate.intervals %}
+    <tr>
+      <td>{{ iv.method }}</td>
+      <td class="num">{{ '%.3f' % iv.estimate }}</td>
+      <td class="num">[{{ '%.3f' % iv.lower }}, {{ '%.3f' % iv.upper }}]</td>
+      <td class="num">{{ '%.3f' % (iv.upper - iv.lower) }}</td>
+      <td class="num">{{ '%.2f' % iv.lam if iv.lam is not none else '' }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+
+  {% if report.metrics %}
+  <h2>Agreement with human labels</h2>
+  <div class="grid">
+    <div class="wrap"><table>
+      <tr><th>metric</th><th class="num">value</th></tr>
+      <tr><td>AUROC (raw score)</td><td class="num">{{ '%.3f' % report.metrics.auroc if report.metrics.auroc is not none else 'n/a' }}</td></tr>
+      <tr><td>precision @ {{ '%.3f' % report.metrics.decision_threshold }}</td><td class="num">{{ '%.3f' % report.metrics.prf.precision }}</td></tr>
+      <tr><td>recall</td><td class="num">{{ '%.3f' % report.metrics.prf.recall }}</td></tr>
+      <tr><td>F1</td><td class="num">{{ '%.3f' % report.metrics.prf.f1 }}</td></tr>
+      <tr><td>Cohen's kappa</td><td class="num">{{ '%.3f' % report.metrics.kappa }}</td></tr>
+      <tr><td>ECE raw / calibrated</td><td class="num">{{ '%.3f' % report.metrics.ece_raw }} / {{ '%.3f' % report.metrics.ece_calibrated }}</td></tr>
+      <tr><td>MCE raw / calibrated</td><td class="num">{{ '%.3f' % report.metrics.mce_raw }} / {{ '%.3f' % report.metrics.mce_calibrated }}</td></tr>
+      <tr><td>Brier raw / calibrated</td><td class="num">{{ '%.3f' % report.metrics.brier_raw }} / {{ '%.3f' % report.metrics.brier_calibrated }}</td></tr>
+    </table></div>
+    {% if svg %}
+    <figure>
+      {{ svg|safe }}
+      <figcaption class="legend muted">{% for name, bins, css in series %}<span style="background: var(--{{ css }})"></span>{{ name }}{% endfor %}</figcaption>
+    </figure>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <h2>Flagged responses</h2>
+  {% if report.crc %}
+  <p class="muted">Conformal risk control, {{ report.crc.risk }} risk &le; {{ report.crc.alpha }}: flag when the calibrated probability is at least {{ '%.3f' % report.crc.threshold }} (fitted on {{ report.crc.n_calibration }} responses).</p>
+  {% else %}
+  <p class="muted">No calibration artifact: responses with a raw score of at least 0.5 are listed.</p>
+  {% endif %}
+  {% if report.flagged %}
+  <div class="wrap"><table>
+    <tr><th>id</th><th class="num">probability</th><th>least supported unit</th></tr>
+    {% for f in report.flagged %}
+    <tr><td>{{ f.id }}</td><td class="num flag">{{ '%.3f' % f.probability }}</td><td>{{ f.unit_text or '' }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}
+  <p>None.</p>
+  {% endif %}
+</main>
+</body>
+</html>

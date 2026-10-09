@@ -1,0 +1,14 @@
+# Gate for the toy outputs in this folder. Produce the two input files first:
+#   faithgate score examples/outputs.jsonl --judge overlap -o examples/out/scores.jsonl
+#   faithgate score examples/calibration.jsonl --judge overlap -o examples/out/calibration-scores.jsonl
+#   faithgate calibrate examples/out/calibration-scores.jsonl --method platt --alpha 0.2 -o examples/out/calibration.json
+# then run: pytest --rag-gate examples/rag-gate.toml
+
+[rag_gate]
+scores = "out/scores.jsonl"           # output of `faithgate score`; labels inside are used for the rate bound
+calibration = "out/calibration.json"  # output of `faithgate calibrate`; maps scores to probabilities and sets the flag threshold
+max_rate = 0.6                        # fail when the upper bound on the hallucination rate exceeds this
+confidence = 0.9                      # one-sided level of that upper bound
+estimator = "ppi++"
+min_labelled = 8                      # a real batch should have far more labels; 8 keeps the toy example small
+per_response = false                  # true adds one test item per response, failing above the CRC threshold
