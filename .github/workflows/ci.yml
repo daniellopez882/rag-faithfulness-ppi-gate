@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Tests (default suite, no downloads)
+        run: uv run pytest
+      - name: Gate on the bundled example outputs
+        run: |
+          uv run faithgate score examples/outputs.jsonl --judge overlap -o examples/out/scores.jsonl
+          uv run faithgate score examples/calibration.jsonl --judge overlap -o examples/out/calibration-scores.jsonl
+          uv run faithgate calibrate examples/out/calibration-scores.jsonl --method platt --alpha 0.2 -o examples/out/calibration.json
+          cd examples && uv run pytest --rag-gate rag-gate.toml -p no:cacheprovider
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t faithgate:ci .
+      - name: Smoke run
+        run: |
+          docker run --rm faithgate:ci --version
+          docker run --rm --entrypoint sh faithgate:ci -c '
+            set -e
+            faithgate score examples/outputs.jsonl --judge overlap -o /tmp/scores.jsonl
+            faithgate score examples/calibration.jsonl --judge overlap -o /tmp/calibration-scores.jsonl
+            faithgate calibrate /tmp/calibration-scores.jsonl --method platt --alpha 0.2 -o /tmp/calibration.json
+            faithgate report /tmp/scores.jsonl --calibration /tmp/calibration.json --out-dir /tmp/report
+            test -s /tmp/report/report.html
+            id -u'
