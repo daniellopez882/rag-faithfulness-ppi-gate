@@ -1,0 +1,30 @@
+# environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.mypy_cache/
+build/
+dist/
+*.egg-info/
+
+# downloaded data, model weights and benchmark caches never enter the repo
+data/
+models/
+*.onnx
+*.safetensors
+*.npz
+*.part
+
+# generated outputs
+examples/out/
+report/
+bench/results/*.html
+bench/scratch/
+
+# assistant tooling
+CLAUDE.md
+AGENTS.md
+.claude/
