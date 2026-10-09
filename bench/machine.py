@@ -77,4 +77,7 @@ def machine_info() -> dict[str, object]:
 
 
 def git_state() -> dict[str, object]:
-    return {"git_sha": _git("rev-parse", "HEAD"), "git_dirty": bool(_git("status", "--porcelain"))}
+    return {
+        "git_sha": _git("rev-parse", "HEAD"),
+        "git_dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
+    }

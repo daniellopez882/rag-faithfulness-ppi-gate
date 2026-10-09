@@ -488,6 +488,7 @@ def crc_experiment(
                     },
                     "resampled_within_test": {
                         "n_calibration": profile.crc_n,
+                        "n_evaluation": int(test_y.size - profile.crc_n),
                         "reps": profile.crc_reps,
                         "mean_risk": float(np.mean(risks)),
                         "sd_risk": float(np.std(risks)),
