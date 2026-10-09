@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from collections.abc import Set as AbstractSet
 
 from pydantic import BaseModel
 
@@ -22,7 +23,7 @@ def merge_spans(spans: Iterable[Span]) -> list[Span]:
     return [(a, b) for a, b in merged]
 
 
-def unsupported_runs(text: str, start: int, end: int, vocab: set[str]) -> list[Span]:
+def unsupported_runs(text: str, start: int, end: int, vocab: AbstractSet[str]) -> list[Span]:
     """Runs of consecutive content words in ``text[start:end]`` that never occur in the source.
 
     Stopwords between two unsupported words do not break a run, so "free valet parking" stays
@@ -46,7 +47,7 @@ def localise(
     response: str,
     units: Sequence[UnitScore],
     threshold: float,
-    source_vocab: set[str] | None = None,
+    source_vocab: AbstractSet[str] | None = None,
 ) -> list[Span]:
     """Spans for the units scored at or above ``threshold``.
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import functools
 import hashlib
 import json
 import sys
@@ -345,12 +346,17 @@ def tune_span_threshold(
     return best
 
 
+@functools.lru_cache(maxsize=8192)
+def _source_vocab(source: str) -> frozenset[str]:
+    return frozenset(vocabulary(source))
+
+
 def _span_eval(
     rows: Sequence[Scored], records: Sequence[Record], tau: float, refine: bool
 ) -> SpanScores:
     pairs = []
     for row, record in zip(rows, records, strict=True):
-        vocab = vocabulary(record.source) if refine else None
+        vocab = _source_vocab(record.source) if refine else None
         pairs.append((localise(record.response, row.units, tau, vocab), record.spans))
     return span_scores(pairs)
 
