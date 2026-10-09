@@ -23,8 +23,3 @@ examples/out/
 report/
 bench/results/*.html
 bench/scratch/
-
-# assistant tooling
-CLAUDE.md
-AGENTS.md
-.claude/
