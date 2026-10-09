@@ -165,6 +165,28 @@ def ppi_table(r: dict[str, Any], judge: str) -> str:
     return _table(header, rows)
 
 
+def ppi_gain_table(r: dict[str, Any]) -> str:
+    """Human labels a classical interval would need to be as narrow as PPI++ with n labels."""
+    by_judge = r["ppi"]["by_judge"]
+    judges = list(by_judge)
+    ns = list(by_judge[judges[0]])
+    rows = [
+        [n, *(_f(by_judge[j][n]["classical_equivalent_labels_ppi++"], 0) for j in judges)]
+        for n in ns
+    ]
+    return _table(["labelled n", *judges], rows)
+
+
+def agreement_table(r: dict[str, Any]) -> str:
+    a = r["agreement"]
+    rows = [[name, _f(kappa)] for name, kappa in a["cohen_kappa_vs_human"].items()]
+    rows.append(
+        ["Krippendorff's alpha, humans + judges", _f(a["krippendorff_alpha_human_and_judges"])]
+    )
+    rows.append(["Krippendorff's alpha, judges only", _f(a["krippendorff_alpha_judges_only"])])
+    return _table(["decisions at the tuned threshold", "Cohen's kappa vs human / alpha"], rows)
+
+
 def crc_table(r: dict[str, Any]) -> str:
     rows = []
     for row in r["crc"]["rows"]:
@@ -233,7 +255,9 @@ def main(argv: list[str]) -> int:
         ("Span localisation", spans_table(results)),
         (f"PPI coverage, {primary} (isotonic)", ppi_table(results, f"{primary} (isotonic)")),
         ("PPI coverage, overlap (isotonic)", ppi_table(results, "overlap (isotonic)")),
+        ("Classical labels matching the PPI++ width", ppi_gain_table(results)),
         (f"Conformal risk control, {primary} (isotonic)", crc_table(results)),
+        ("Agreement", agreement_table(results)),
         ("Throughput", throughput_table(results)),
     ]
     for title, body in sections:
