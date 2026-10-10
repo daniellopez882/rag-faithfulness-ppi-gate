@@ -64,6 +64,8 @@ def decisions_table(r: dict[str, Any]) -> str:
                 f"{brier} -> {_f(iso['brier'])}" if iso else brier,
             ]
         )
+    status = r["llm_judge"]["status"]
+    rows.append(["llm (position-swapped)", *([status] * 7)])
     header = [
         "judge",
         "F1 raw@0.5",
