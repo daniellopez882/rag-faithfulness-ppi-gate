@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  checks:
+  lint-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,35 +17,55 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-      - name: Install
-        run: uv sync --frozen
-      - name: Lint
-        run: uv run ruff check .
-      - name: Format
-        run: uv run ruff format --check .
-      - name: Tests (default suite, no downloads)
-        run: uv run pytest
-      - name: Gate on the bundled example outputs
+      - run: uv sync --frozen
+      - name: ruff
         run: |
-          uv run faithgate score examples/outputs.jsonl --judge overlap -o examples/out/scores.jsonl
-          uv run faithgate score examples/calibration.jsonl --judge overlap -o examples/out/calibration-scores.jsonl
-          uv run faithgate calibrate examples/out/calibration-scores.jsonl --method platt --alpha 0.2 -o examples/out/calibration.json
-          cd examples && uv run pytest --rag-gate rag-gate.toml -p no:cacheprovider
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: pytest (default suite; integration tests need the fetched data and are deselected)
+        run: uv run pytest
 
-  docker:
+  # The gate on the toy outputs in examples/, the way a downstream project would wire it,
+  # with the HTML report kept as the review queue for flagged responses.
+  example-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build image
-        run: docker build -t faithgate:ci .
-      - name: Smoke run
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: calibrate once on the labelled example set
+        run: |
+          uv run faithgate score examples/calibration.jsonl --judge overlap -o examples/out/calibration-scores.jsonl
+          uv run faithgate calibrate examples/out/calibration-scores.jsonl --method platt --alpha 0.2 -o examples/out/calibration.json
+      - name: score and gate
+        run: |
+          uv run faithgate score examples/outputs.jsonl --judge overlap -o examples/out/scores.jsonl
+          cd examples && uv run pytest --rag-gate rag-gate.toml -p no:cacheprovider
+      - name: report
+        if: always()
+        run: uv run faithgate report examples/out/scores.jsonl --calibration examples/out/calibration.json --out-dir examples/out/report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rag-gate-report
+          path: examples/out/report/
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t faithgate:ci .
+      - name: smoke run as uid 10001 on the bundled examples
         run: |
           docker run --rm faithgate:ci --version
           docker run --rm --entrypoint sh faithgate:ci -c '
             set -e
+            test "$(id -u)" = 10001
+            faithgate score examples/calibration.jsonl --judge overlap -o /tmp/cal.jsonl
+            faithgate calibrate /tmp/cal.jsonl --method platt --alpha 0.2 -o /tmp/calibration.json
             faithgate score examples/outputs.jsonl --judge overlap -o /tmp/scores.jsonl
-            faithgate score examples/calibration.jsonl --judge overlap -o /tmp/calibration-scores.jsonl
-            faithgate calibrate /tmp/calibration-scores.jsonl --method platt --alpha 0.2 -o /tmp/calibration.json
             faithgate report /tmp/scores.jsonl --calibration /tmp/calibration.json --out-dir /tmp/report
-            test -s /tmp/report/report.html
-            id -u'
+            grep -q "ppi++" /tmp/report/report.json'
