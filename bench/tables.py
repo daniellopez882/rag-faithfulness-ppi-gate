@@ -35,15 +35,28 @@ def measured_on(r: dict[str, Any]) -> str:
 
 def _ci(m: dict[str, Any], key: str) -> str:
     ci = m[f"{key}_ci95"]
+    if ci is None:
+        return _f(m[key])
     return f"{_f(m[key])} [{_f(ci['lower'])}, {_f(ci['upper'])}]"
 
 
 def ranking_table(r: dict[str, Any]) -> str:
     rows = [
-        [SHOWN.get(name, name), _ci(m, "auroc"), _ci(m, "auroc_length_matched")]
+        [
+            SHOWN.get(name, name),
+            _ci(m, "auroc"),
+            _ci(m, "auroc_task_matched"),
+            _ci(m, "auroc_task_length_matched"),
+        ]
         for name, m in r["meta_eval"].items()
     ]
-    return _table(["judge", "AUROC [95% CI]", "length-matched AUROC [95% CI]"], rows)
+    header = [
+        "judge",
+        "pooled AUROC [95% CI]",
+        "task-matched [95% CI]",
+        "task- and length-matched [95% CI]",
+    ]
+    return _table(header, rows)
 
 
 def decisions_table(r: dict[str, Any]) -> str:
@@ -81,10 +94,10 @@ def decisions_table(r: dict[str, Any]) -> str:
 
 def dev_table(r: dict[str, Any]) -> str:
     rows = [
-        [name, _f(auc), _f(r["dev_auroc_length_matched"][name])]
+        [name, _f(auc), _f(r["dev_auroc_task_length_matched"][name])]
         for name, auc in r["dev_auroc"].items()
     ]
-    return _table(["NLI judge", "dev AUROC", "dev length-matched AUROC"], rows)
+    return _table(["NLI judge", "dev AUROC", "dev task- and length-matched AUROC"], rows)
 
 
 def calibration_table(r: dict[str, Any], judge: str) -> str:
@@ -141,8 +154,8 @@ def per_task_table(r: dict[str, Any], judge: str) -> str:
         "n",
         "hallucinated share",
         "AUROC length",
-        f"AUROC / matched, {judge}",
-        "AUROC / matched, overlap",
+        f"AUROC / length-matched, {judge}",
+        "AUROC / length-matched, overlap",
         "ECE raw",
         "ECE isotonic (global)",
         "ECE isotonic (per task)",
@@ -162,6 +175,8 @@ def spans_table(r: dict[str, Any]) -> str:
 
 
 def ppi_table(r: dict[str, Any], judge: str) -> str:
+    """Score intervals, which the gate and the report use; Wald upper-bound coverage alongside.
+    The judge-only interval is always Wald."""
     ppi = r["ppi"]
     rows = []
     for n, by_method in ppi["by_judge"][judge].items():
@@ -174,6 +189,7 @@ def ppi_table(r: dict[str, Any], judge: str) -> str:
                     _f(s["coverage"]),
                     _f(s["mean_width"]),
                     _f(s["upper_coverage"]),
+                    _f(s["wald_upper_coverage"]) if method != "judge-only" else "",
                     _f(s.get("mean_lambda"), 2) if "mean_lambda" in s else "",
                 ]
             )
@@ -185,7 +201,43 @@ def ppi_table(r: dict[str, Any], judge: str) -> str:
         f"coverage (nominal {nominal:.2f})",
         "mean CI width",
         f"upper-bound coverage (nominal {upper:.2f})",
+        "same, Wald bound",
         "mean lambda",
+    ]
+    return _table(header, rows)
+
+
+def low_rate_table(r: dict[str, Any], judge: str) -> str:
+    """Upper-bound coverage on batches thinned to a budget-like rate: score against Wald."""
+    low = r["ppi_low_rate"]
+    rows = []
+    for block in low["by_rate"].values():
+        for n, cells in block["by_judge"][judge].items():
+            empty = block["share_of_draws_without_a_positive_label"][n]
+            for method in ("classical", "ppi++"):
+                score, wald = cells[f"{method} score"], cells[f"{method} wald"]
+                rows.append(
+                    [
+                        _f(block["true_rate"]),
+                        n,
+                        method,
+                        _f(score["upper_coverage"]),
+                        _f(score["mean_upper_bound"]),
+                        _f(wald["upper_coverage"]),
+                        _f(wald["mean_upper_bound"]),
+                        _f(empty),
+                    ]
+                )
+    nominal = low["nominal_coverage_upper"]
+    header = [
+        "batch rate",
+        "labelled n",
+        "estimator",
+        f"score: coverage (nominal {nominal:.2f})",
+        "score: mean bound",
+        "Wald: coverage",
+        "Wald: mean bound",
+        "draws with no hallucinated label",
     ]
     return _table(header, rows)
 
@@ -205,11 +257,16 @@ def ppi_gain_table(r: dict[str, Any]) -> str:
 def agreement_table(r: dict[str, Any]) -> str:
     a = r["agreement"]
     rows = [[name, _f(kappa)] for name, kappa in a["cohen_kappa_vs_human"].items()]
-    rows.append(
-        ["Krippendorff's alpha, humans + judges", _f(a["krippendorff_alpha_human_and_judges"])]
-    )
-    rows.append(["Krippendorff's alpha, judges only", _f(a["krippendorff_alpha_judges_only"])])
-    return _table(["decisions at the tuned threshold", "Cohen's kappa vs human / alpha"], rows)
+    return _table(["decisions at the tuned threshold", "Cohen's kappa vs human"], rows)
+
+
+def krippendorff_table(r: dict[str, Any]) -> str:
+    a = r["agreement"]
+    rows = [
+        ["humans and the five judges", _f(a["krippendorff_alpha_human_and_judges"])],
+        ["the five judges only", _f(a["krippendorff_alpha_judges_only"])],
+    ]
+    return _table(["raters", "Krippendorff's alpha"], rows)
 
 
 def crc_table(r: dict[str, Any]) -> str:
@@ -230,7 +287,7 @@ def crc_table(r: dict[str, Any]) -> str:
     header = [
         "risk",
         "alpha",
-        "threshold (train calibration)",
+        "raw-score threshold (train calibration)",
         "test risk",
         "test flag rate",
         "mean risk, resampled",
@@ -283,9 +340,18 @@ def main(argv: list[str]) -> int:
         ("Span localisation", spans_table(results)),
         (f"PPI coverage, {primary} (isotonic)", ppi_table(results, f"{primary} (isotonic)")),
         ("PPI coverage, overlap (isotonic)", ppi_table(results, "overlap (isotonic)")),
+        (
+            f"Upper bound at low rates, {primary} (isotonic)",
+            low_rate_table(results, f"{primary} (isotonic)"),
+        ),
+        (
+            "Upper bound at low rates, overlap (isotonic)",
+            low_rate_table(results, "overlap (isotonic)"),
+        ),
         ("Classical labels matching the PPI++ width", ppi_gain_table(results)),
-        (f"Conformal risk control, {primary} (isotonic)", crc_table(results)),
+        (f"Conformal risk control, {results['crc']['judge']}", crc_table(results)),
         ("Agreement", agreement_table(results)),
+        ("Agreement across raters", krippendorff_table(results)),
         ("Throughput", throughput_table(results)),
     ]
     for title, body in sections:

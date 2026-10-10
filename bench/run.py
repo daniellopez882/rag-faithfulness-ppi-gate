@@ -4,7 +4,8 @@
 
 Stages: chunk-size selection on a dev slice of RAGTruth train, NLI scoring of a calibration slice of
 train and of the full test split, judge meta-evaluation with calibration, span F1, agreement, the
-PPI coverage experiment, the conformal-risk-control check and judge throughput. NLI rows are cached
+PPI coverage experiments (at RAGTruth's own rate and on batches thinned to a low rate), the
+conformal-risk-control check and judge throughput. NLI rows are cached
 under ``$FAITHGATE_DATA_DIR/nli-cache`` so an interrupted run resumes where it stopped.
 """
 
@@ -47,7 +48,15 @@ from faithgate.metrics import (
 )
 from faithgate.nli import EntailmentModel, load_default_nli
 from faithgate.paths import nli_cache_dir
-from faithgate.ppi import classical_mean, interval, judge_only_mean, ppi_mean, ppi_plusplus_mean
+from faithgate.ppi import (
+    Interval,
+    MeanEstimate,
+    classical_mean,
+    interval,
+    judge_only_mean,
+    ppi_mean,
+    ppi_plusplus_mean,
+)
 from faithgate.ragtruth import TASK_TYPES, load_ragtruth, stratified_sample
 from faithgate.records import Record, Scored
 from faithgate.report import reliability_svg
@@ -71,6 +80,7 @@ class Profile:
     grid: tuple[ChunkConfig, ...]
     ppi_ns: tuple[int, ...]
     ppi_reps: int
+    low_rate_ns: tuple[int, ...]
     crc_reps: int
     crc_n: int
     bootstrap: int
@@ -92,6 +102,7 @@ PROFILES = {
         ),
         ppi_ns=(50, 100, 200, 500),
         ppi_reps=1000,
+        low_rate_ns=(30, 50, 100, 200),
         crc_reps=500,
         crc_n=500,
         bootstrap=1000,
@@ -105,6 +116,7 @@ PROFILES = {
         grid=(ChunkConfig("sentence", 25), ChunkConfig("sentence", 60)),
         ppi_ns=(12,),
         ppi_reps=100,
+        low_rate_ns=(8,),
         crc_reps=50,
         crc_n=18,
         bootstrap=50,
@@ -173,6 +185,14 @@ class MatrixCache:
 
 def _labels(records: Sequence[Record]) -> np.ndarray:
     return np.array([r.label for r in records], dtype=int)
+
+
+def _matched(y: np.ndarray, s: np.ndarray, strata: np.ndarray) -> float | None:
+    """Matched AUROC, or None when no stratum holds both classes (the smoke profile's slices)."""
+    try:
+        return matched_auroc(y, s, strata)[0]
+    except ValueError:
+        return None
 
 
 def _prf(y: np.ndarray, decided: np.ndarray) -> dict[str, float]:
@@ -255,27 +275,39 @@ def evaluate_judge(
 ) -> dict[str, object]:
     """Ranking, decision and calibration metrics of one judge on test.
 
-    ``strata`` (task type and response length in units) defines the length-matched AUROC.
-    Scores that are not probabilities (a unit count) get no raw-probability metrics.
+    Two matched AUROCs split the pooled one: task-matched compares only responses of the same
+    task type, so base-rate differences between tasks drop out; task- and length-matched
+    (``strata``: task type and response length in units) also holds length fixed. Scores that
+    are not probabilities (a unit count) get no raw-probability metrics.
     """
     raw = np.clip(test_s, 0.0, 1.0)
     threshold = best_f1_threshold(cal_y, cal_s)
     tuned = test_s >= threshold
-    matched, pairs = matched_auroc(test_y, test_s, strata)
+
+    def matched_block(name: str, groups: np.ndarray, seed: int) -> dict[str, object]:
+        if _matched(test_y, test_s, groups) is None:
+            return {f"auroc_{name}": None, f"auroc_{name}_ci95": None, f"{name}_pairs": 0}
+        value, pairs = matched_auroc(test_y, test_s, groups)
+        ci = stratified_bootstrap(
+            lambda i: matched_auroc(test_y[i], test_s[i], groups[i])[0],
+            test_y.size,
+            tasks,
+            profile.bootstrap,
+            seed=seed,
+        )
+        return {
+            f"auroc_{name}": value,
+            f"auroc_{name}_ci95": ci.model_dump(),
+            f"{name}_pairs": pairs,
+        }
+
     result: dict[str, object] = {
         "auroc": auroc(test_y, test_s),
         "auroc_ci95": stratified_bootstrap(
             lambda i: auroc(test_y[i], test_s[i]), test_y.size, tasks, profile.bootstrap, seed=1
         ).model_dump(),
-        "auroc_length_matched": matched,
-        "auroc_length_matched_ci95": stratified_bootstrap(
-            lambda i: matched_auroc(test_y[i], test_s[i], strata[i])[0],
-            test_y.size,
-            tasks,
-            profile.bootstrap,
-            seed=3,
-        ).model_dump(),
-        "length_matched_pairs": pairs,
+        **matched_block("task_matched", tasks, seed=4),
+        **matched_block("task_length_matched", strata, seed=3),
         "uncalibrated_at_0.5": _prf(test_y, raw >= 0.5) if probabilistic else None,
         "tuned_threshold": threshold,
         "at_tuned_threshold": _prf(test_y, tuned),
@@ -313,7 +345,7 @@ def evaluate_judge(
             "n": int(mask.sum()),
             "positive_rate": float(y_t.mean()),
             "auroc": auroc(y_t, s_t) if 0 < y_t.sum() < y_t.size else None,
-            "auroc_length_matched": matched_auroc(y_t, s_t, strata[mask])[0],
+            "auroc_length_matched": _matched(y_t, s_t, strata[mask]),
             "f1_at_tuned_threshold": precision_recall_f1(y_t, tuned[mask]).f1,
             "ece_raw": expected_calibration_error(raw[mask], y_t) if probabilistic else None,
         }
@@ -413,6 +445,16 @@ def span_experiment(
     return out
 
 
+def _intervals(est: MeanEstimate, alpha: float) -> dict[str, Interval]:
+    """Two-sided and one-sided upper intervals, score (the default) and Wald."""
+    return {
+        "two": interval(est, alpha),
+        "upper": interval(est, alpha / 2, alternative="upper"),
+        "wald_two": interval(est, alpha, kind="wald"),
+        "wald_upper": interval(est, alpha / 2, alternative="upper", kind="wald"),
+    }
+
+
 def ppi_experiment(
     y_all: np.ndarray, judges: dict[str, np.ndarray], profile: Profile, alpha: float = 0.1
 ) -> dict[str, object]:
@@ -428,6 +470,7 @@ def ppi_experiment(
         "nominal_coverage_two_sided": 1 - alpha,
         "nominal_coverage_upper": 1 - alpha / 2,
         "reps": profile.ppi_reps,
+        "intervals": "score (the default); wald_* keys hold the Wald interval for comparison",
         "by_judge": {},
     }
     stats: dict[str, dict[int, dict[str, dict[str, list[float]]]]] = {
@@ -447,20 +490,22 @@ def ppi_experiment(
                     "judge-only": judge_only_mean(f),
                 }
                 for method, est in estimates.items():
-                    two = interval(est, alpha)
-                    upper = interval(est, alpha / 2, alternative="upper")
-                    bucket = stats[judge][n].setdefault(
-                        method,
-                        {"cover": [], "width": [], "upper_cover": [], "upper": [], "lam": []},
-                    )
-                    bucket["cover"].append(
-                        float(two.lower is not None and two.lower <= theta <= two.upper)
-                    )
-                    bucket["width"].append(two.width)
-                    bucket["upper_cover"].append(float(theta <= upper.upper))
-                    bucket["upper"].append(upper.upper)
+                    ivs = _intervals(est, alpha)
+                    bucket = stats[judge][n].setdefault(method, {})
+                    for prefix in ("", "wald_"):
+                        two, upper = ivs[prefix + "two"], ivs[prefix + "upper"]
+                        cells = {
+                            "cover": float(
+                                two.lower is not None and two.lower <= theta <= two.upper
+                            ),
+                            "width": two.width,
+                            "upper_cover": float(theta <= upper.upper),
+                            "upper": upper.upper,
+                        }
+                        for key, value in cells.items():
+                            bucket.setdefault(prefix + key, []).append(value)
                     if est.lam is not None:
-                        bucket["lam"].append(est.lam)
+                        bucket.setdefault("lam", []).append(est.lam)
         log(f"PPI n={n} done")
     by_judge: dict[str, object] = {}
     for judge in judges:
@@ -468,11 +513,17 @@ def ppi_experiment(
         for n in profile.ppi_ns:
             rows[str(n)] = {
                 method: {
-                    "coverage": float(np.mean(b["cover"])),
-                    "mean_width": float(np.mean(b["width"])),
-                    "upper_coverage": float(np.mean(b["upper_cover"])),
-                    "mean_upper_bound": float(np.mean(b["upper"])),
-                    **({"mean_lambda": float(np.mean(b["lam"]))} if b["lam"] else {}),
+                    **{
+                        f"{prefix}{name}": float(np.mean(b[prefix + key]))
+                        for prefix in ("", "wald_")
+                        for name, key in (
+                            ("coverage", "cover"),
+                            ("mean_width", "width"),
+                            ("upper_coverage", "upper_cover"),
+                            ("mean_upper_bound", "upper"),
+                        )
+                    },
+                    **({"mean_lambda": float(np.mean(b["lam"]))} if "lam" in b else {}),
                 }
                 for method, b in stats[judge][n].items()
             }
@@ -483,6 +534,80 @@ def ppi_experiment(
             )
         by_judge[judge] = rows
     out["by_judge"] = by_judge
+    return out
+
+
+def low_rate_experiment(
+    y_all: np.ndarray,
+    judges: dict[str, np.ndarray],
+    profile: Profile,
+    rates: tuple[float, ...] = (0.05, 0.10),
+    alpha: float = 0.05,
+) -> dict[str, object]:
+    """Coverage of the gate's upper bound on batches with a budget-like hallucination rate.
+
+    RAGTruth test is hallucinated at about 0.35, far above any budget a team would set. Each rep
+    builds a batch from every faithful test response and a fresh random subset of the
+    hallucinated ones, sized so the batch rate is ``rate``; the judge's probabilities come
+    along unchanged, so a calibrator fitted at train's base rate now over-predicts. Then n
+    responses of the batch are labelled at random, as in ``ppi_experiment``.
+    """
+    rng = np.random.default_rng(profile.seed + 3)
+    positives, negatives = np.flatnonzero(y_all == 1), np.flatnonzero(y_all == 0)
+    out: dict[str, object] = {
+        "alpha_upper": alpha,
+        "nominal_coverage_upper": 1 - alpha,
+        "reps": profile.ppi_reps,
+        "batch": "all faithful test responses plus a random subset of the hallucinated ones",
+        "by_rate": {},
+    }
+    by_rate: dict[str, object] = {}
+    for rate in rates:
+        n_pos = max(1, round(rate / (1 - rate) * negatives.size))
+        batch_n = negatives.size + n_pos
+        theta = n_pos / batch_n
+        stats: dict[str, dict[int, dict[str, list[float]]]] = {
+            j: {n: {} for n in profile.low_rate_ns} for j in judges
+        }
+        no_positive: dict[int, list[float]] = {n: [] for n in profile.low_rate_ns}
+        for n in profile.low_rate_ns:
+            for _ in range(profile.ppi_reps):
+                batch = np.concatenate([negatives, rng.choice(positives, n_pos, replace=False)])
+                perm = rng.permutation(batch)
+                lab, unlab = perm[:n], perm[n:]
+                y = y_all[lab]
+                no_positive[n].append(float(y.sum() == 0))
+                for judge, f in judges.items():
+                    for method, est in (
+                        ("classical", classical_mean(y)),
+                        ("ppi++", ppi_plusplus_mean(y, f[lab], f[unlab])),
+                    ):
+                        for kind in ("score", "wald"):
+                            upper = interval(est, alpha, alternative="upper", kind=kind).upper
+                            bucket = stats[judge][n].setdefault(f"{method} {kind}", [])
+                            bucket.append(upper)
+            log(f"low rate {rate} n={n} done")
+        by_rate[f"{rate:.2f}"] = {
+            "batch_n": batch_n,
+            "true_rate": theta,
+            "share_of_draws_without_a_positive_label": {
+                str(n): float(np.mean(v)) for n, v in no_positive.items()
+            },
+            "by_judge": {
+                judge: {
+                    str(n): {
+                        name: {
+                            "upper_coverage": float(np.mean(np.asarray(v) >= theta)),
+                            "mean_upper_bound": float(np.mean(v)),
+                        }
+                        for name, v in stats[judge][n].items()
+                    }
+                    for n in profile.low_rate_ns
+                }
+                for judge in judges
+            },
+        }
+    out["by_rate"] = by_rate
     return out
 
 
@@ -650,11 +775,9 @@ def run(
 
     dev_strata = strata(dev, scores["length"]["dev"])
     dev_auroc = {name: auroc(y_dev, scores[name]["dev"]) for name in NLI_JUDGES}
-    dev_matched = {
-        name: matched_auroc(y_dev, scores[name]["dev"], dev_strata)[0] for name in NLI_JUDGES
-    }
+    dev_matched = {name: _matched(y_dev, scores[name]["dev"], dev_strata) for name in NLI_JUDGES}
     primary = max(dev_auroc, key=lambda k: dev_auroc[k])
-    log(f"dev AUROC {dev_auroc}; length-matched {dev_matched}; primary judge {primary}")
+    log(f"dev AUROC {dev_auroc}; task- and length-matched {dev_matched}; primary judge {primary}")
 
     tasks = np.array([r.task_type for r in test])
     cal_tasks = np.array([r.task_type for r in calib])
@@ -717,15 +840,16 @@ def run(
     }
     ppi = ppi_experiment(y_test, ppi_judges, profile)
     lap("ppi")
-
-    crc = crc_experiment(
-        iso[primary].predict(scores[primary]["calib"]),
-        y_cal,
-        iso[primary].predict(scores[primary]["test"]),
+    low_rate = low_rate_experiment(
         y_test,
+        {name: ppi_judges[name] for name in (f"{primary} (isotonic)", "overlap (isotonic)")},
         profile,
     )
-    crc["judge"] = f"{primary} (isotonic)"
+    lap("ppi_low_rate")
+
+    # On the raw score, as `faithgate calibrate` does: a fixed function of the response.
+    crc = crc_experiment(scores[primary]["calib"], y_cal, scores[primary]["test"], y_test, profile)
+    crc["judge"] = f"{primary} (raw score)"
     lap("crc")
 
     if reuse_throughput is None:
@@ -764,18 +888,20 @@ def run(
         "timings_seconds": timings,
         "chunk_selection": chunk_selection,
         "dev_auroc": dev_auroc,
-        "dev_auroc_length_matched": dev_matched,
+        "dev_auroc_task_length_matched": dev_matched,
         "primary_judge": primary,
         "primary_rule": "highest dev AUROC among the NLI judges",
         "length_baseline": {
             "score": f"number of checkable {config.unit} units in the response",
-            "strata_for_matched_auroc": f"task type x number of {config.unit} units",
+            "strata_for_task_matched_auroc": "task type",
+            "strata_for_task_length_matched_auroc": f"task type x number of {config.unit} units",
         },
         "conv": conv_info,
         "meta_eval": meta,
         "spans": spans,
         "agreement": agreement,
         "ppi": ppi,
+        "ppi_low_rate": low_rate,
         "crc": crc,
         "throughput": speed,
         "llm_judge": {
