@@ -18,12 +18,22 @@ class Segment:
 ABBREVIATIONS = frozenset(
     {
         "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "mt", "ft", "vs", "etc", "inc", "ltd",
-        "co", "corp", "dept", "univ", "gov", "gen", "col", "lt", "sgt", "capt", "rev", "hon",
-        "e.g", "i.e", "u.s", "u.k", "u.n", "a.m", "p.m", "no", "nos", "vol", "fig", "approx",
-        "est", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov",
-        "dec", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "ave", "blvd", "rd", "hwy", "al",
+        "corp", "dept", "univ", "gov", "gen", "col", "lt", "sgt", "capt", "rev", "hon", "approx",
+        "jan", "feb", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec", "mon",
+        "tue", "thu", "fri", "ave", "blvd", "rd", "hwy",
     }
 )  # fmt: skip
+# Abbreviations that are also ordinary words ("the answer is no.", "we sat in the sun."). They only
+# hold the sentence open before a number or a bracket ("No. 5", "Mar. 3", "et al. (2019)").
+AMBIGUOUS_ABBREVIATIONS = frozenset(
+    {"no", "nos", "co", "est", "al", "fig", "vol", "mar", "sat", "sun", "wed"}
+)
+# After a dotted acronym ("U.S.", "D.C.", "p.m.") a capitalised word is usually a name ("U.S.
+# Army"); one of these openers means the acronym ended the sentence.
+_SENTENCE_OPENERS = frozenset(
+    "the a an he she it they we i you this that these those there his her its their our my "
+    "in on at after before when while if as but however then also many some most each".split()
+)
 
 _BOUNDARY = re.compile(r"[.!?]+[\"')\]]*(?=\s)")
 _BULLET = re.compile(r"^\s*(?:[-*•]|\d{1,2}[.)])\s+")
@@ -67,15 +77,22 @@ def _is_false_boundary(text: str, dot_pos: int, line_start: int) -> bool:
     token = left.split()[-1] if left.split() else ""
     token = token.lstrip("(\"'")
     low = token.lower()
-    if low in ABBREVIATIONS or low.rstrip(".") in ABBREVIATIONS:
+    nxt = text[dot_pos + 1 :].lstrip()
+    if low in ("e.g", "i.e") or low in ABBREVIATIONS:
+        return True
+    if low in AMBIGUOUS_ABBREVIATIONS and nxt[:1] and (nxt[0].isdigit() or nxt[0] in "(["):
         return True
     # "1. Preheat the oven" - a list marker at the start of a line, not a sentence.
     if re.fullmatch(r"\d{1,2}", token) and left.strip() == token:
         return True
-    # Single capital initials ("J. K. Rowling") and dotted acronyms ("U.S.A.").
-    if re.fullmatch(r"[A-Z]", token) or re.fullmatch(r"(?:[A-Za-z]\.)+[A-Za-z]", token):
+    # Single capital initials ("J. K. Rowling").
+    if re.fullmatch(r"[A-Z]", token):
         return True
-    nxt = text[dot_pos + 1 :].lstrip()
+    if re.fullmatch(r"(?:[A-Za-z]\.)+[A-Za-z]", token):
+        opener = re.match(r"[A-Za-z]+", nxt)
+        return not (
+            opener and opener.group()[0].isupper() and opener.group().lower() in _SENTENCE_OPENERS
+        )
     # A lower-case continuation almost never starts a new sentence in edited text.
     return bool(nxt) and nxt[0].islower()
 
@@ -201,17 +218,73 @@ def chunk_source(text: str, max_words: int, overlap: int = 1) -> list[Segment]:
     return chunks
 
 
+def _is_vowel(word: str, i: int) -> bool:
+    if word[i] in "aeiou":
+        return True
+    return word[i] == "y" and i > 0 and not _is_vowel(word, i - 1)
+
+
+def _measure(stem: str) -> int:
+    """Porter's m: how many vowel-consonant sequences ``stem`` contains."""
+    shape = "".join("v" if _is_vowel(stem, i) else "c" for i in range(len(stem)))
+    return len(re.findall(r"v+c+", shape))
+
+
+def _strip_plural(word: str) -> str:
+    if word.endswith("ies") and len(word) >= 4:
+        return word[:-2]
+    if (
+        len(word) >= 5
+        and word.endswith("es")
+        and (word[-3] in "sxz" or word[-4:-2] in ("ch", "sh"))
+    ):
+        return word[:-2]
+    if len(word) >= 4 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
+def _strip_ed_ing(word: str) -> str:
+    # "need" and "agreed" both end in -eed; _canonical tells them apart by the stem's measure.
+    if word.endswith("eed"):
+        return word
+    for suffix in ("ing", "ed"):
+        if word.endswith(suffix):
+            stem = word[: -len(suffix)]
+            # A stem without a vowel means the suffix was part of the word: "bring", "red".
+            if len(stem) >= 2 and any(_is_vowel(stem, i) for i in range(len(stem))):
+                return stem
+            return word
+    return word
+
+
+def _canonical(stem: str) -> str:
+    """Applied to every word, inflected or not, so both sides of a match end up in one form:
+    final e dropped ("close", "clos-ed"), doubled consonant undone ("run", "runn-ing"), final
+    consonant-y as i ("study", "studi-es")."""
+    if stem.endswith("eed") and _measure(stem[:-3]) > 0:
+        stem = stem[:-1]
+    if stem.endswith("e") and len(stem) >= 3:
+        stem = stem[:-1]
+    if len(stem) >= 3 and stem[-1] == stem[-2] and not _is_vowel(stem, len(stem) - 1):
+        stem = stem[:-1]
+    if len(stem) >= 2 and stem.endswith("y") and not _is_vowel(stem, len(stem) - 2):
+        stem = stem[:-1] + "i"
+    return stem
+
+
 def normalise_token(token: str) -> str:
-    """Lower-case, drop thousands separators and possessives, and strip common suffixes."""
+    """Lower-case, drop thousands separators and possessives, and reduce the regular inflections
+    (plural or third-person -s, -ed, -ing) to one key: "closes", "closed", "closing" and "close"
+    all normalise to the same form."""
     tok = token.lower().replace("’", "'")
     if re.fullmatch(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?", tok):
         return tok.replace(",", "")
     if tok.endswith("'s"):
         tok = tok[:-2]
-    for suffix in ("ing", "ed", "es", "s", "ly"):
-        if len(tok) > len(suffix) + 3 and tok.endswith(suffix) and not tok[0].isdigit():
-            return tok[: -len(suffix)]
-    return tok
+    if not tok.isalpha():
+        return tok
+    return _canonical(_strip_ed_ing(_strip_plural(tok)))
 
 
 def content_tokens(text: str, start: int = 0, end: int | None = None) -> list[tuple[int, int, str]]:
