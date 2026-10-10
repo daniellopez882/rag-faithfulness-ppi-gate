@@ -24,9 +24,9 @@
     "throughput_n": 150,
     "seed": 7
   },
-  "date": "2026-10-10T18:54:52+00:00",
-  "command": "uv run python -m bench.run --profile full --reuse-throughput bench/results/full.json",
-  "git_sha": "7f7d94065079f2fac9fa86e0cb1f39477a500230",
+  "date": "2026-10-10T19:20:39+00:00",
+  "command": "uv run python -m bench.run --profile full",
+  "git_sha": "481a3002170b4d565da7a884841a11a5bdc3ab4e",
   "git_dirty": false,
   "machine": {
     "cpu": "Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz",
@@ -62,16 +62,16 @@
   },
   "timings_seconds": {
     "load": 2.1,
-    "chunk_selection": 2.1,
-    "nli_scoring": 3.6,
-    "meta_eval": 120.1,
-    "spans": 8.6,
+    "chunk_selection": 2.0,
+    "nli_scoring": 3.3,
+    "meta_eval": 115.9,
+    "spans": 10.0,
     "agreement": 0.1,
-    "ppi": 33.1,
-    "ppi_low_rate": 11.4,
+    "ppi": 36.8,
+    "ppi_low_rate": 13.4,
     "crc": 0.5,
-    "throughput": 0.0,
-    "total": 181.7
+    "throughput": 93.0,
+    "total": 277.2
   },
   "chunk_selection": {
     "dev_n": 150,
@@ -2330,21 +2330,16 @@
   "throughput": {
     "nli": {
       "responses": 150,
-      "seconds": 98.59997909993399,
-      "responses_per_second": 1.5212984969091177,
-      "nli_pairs_per_second": 316.29824148736435,
-      "mean_pairs_per_response": 207.91333333333333,
+      "seconds": 86.75154660000408,
+      "responses_per_second": 1.7290758018600323,
+      "nli_pairs_per_second": 359.7169298189611,
+      "mean_pairs_per_response": 208.04,
       "config": "claim-w25-o1"
     },
     "overlap": {
       "responses": 2700,
-      "seconds": 3.3420985999982804,
-      "responses_per_second": 807.8756264107196
-    },
-    "measured_in": {
-      "git_sha": "2744aef4c3af3b34a9bc99bafffb5e967bd5bdfb",
-      "date": "2026-10-09T15:41:38+00:00",
-      "note": "copied from that run's results file; not re-measured in this run"
+      "seconds": 3.8682905999885406,
+      "responses_per_second": 697.9827213622468
     }
   },
   "llm_judge": {

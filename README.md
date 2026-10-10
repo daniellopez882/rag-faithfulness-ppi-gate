@@ -19,10 +19,9 @@ word-level hallucination spans of RAGTruth.
 > narrow as 55 labels alone.
 
 Where the numbers come from: `bench/results/full.json`, written by one run of the benchmark at
-commit `7f7d940` together with its command and a description of the machine. The NLI throughput
-figures are older and say so where they appear. Measured on 2026-10-10 on an Intel Core i5-8500
-desktop (6 cores, 12 GB of RAM) running Windows 10, CPU only, with Python 3.12.14 and
-onnxruntime 1.31.0.
+commit `481a300` together with its command and a description of the machine. Measured on
+2026-10-10 (UTC) on an Intel Core i5-8500 desktop (6 cores, 12 GB of RAM) running Windows 10, CPU
+only, with Python 3.12.14 and onnxruntime 1.31.0.
 
 ## What the interval guarantees
 
@@ -485,15 +484,14 @@ and Krippendorff's alpha across raters, with each judge's decisions as one rater
 | the five judges only | 0.402 |
 
 Throughput is end to end on the i5-8500: splitting, chunking, tokenising and NLI, on a stratified
-sample of 150 test responses after a warm-up. It was timed in the run of 2026-10-09 at commit
-`2744aef` and copied into the current results file with that provenance (`throughput.measured_in`).
-Two splitter fixes since then changed the units of some responses, so these figures are due to be
-timed again on the current code.
+sample of 150 test responses after a warm-up, timed in the same run as every other figure here,
+on the code that includes both splitter fixes. Those 150 responses average 208.0 NLI pairs each.
+The overlap judge is timed over all 2,700 test responses.
 
 | judge | responses timed | responses/s | NLI pairs/s |
 |---|---|---|---|
-| NLI (claim-w25-o1) | 150 | 1.52 | 316.3 |
-| overlap | 2700 | 807.9 |  |
+| NLI (claim-w25-o1) | 150 | 1.73 | 359.7 |
+| overlap | 2700 | 698.0 |  |
 
 ### LLM judge
 
@@ -550,11 +548,12 @@ The full profile NLI-scores the 150-response dev slice under four chunk configur
 runs the experiments above. NLI scoring dominates a cold run. NLI rows are cached in
 `$FAITHGATE_DATA_DIR/nli-cache`, keyed on the unit and chunk texts that were paired, so an
 interrupted run resumes and a splitter change re-scores only the responses it affects. The
-committed results were produced that way, on top of the cache the first full run filled, with
-`--reuse-throughput bench/results/full.json` to carry the earlier timing over instead of timing
-again. `bench.tables` prints every results table in this README from the results file. `--profile
-smoke` runs the same code on a 36-response test slice as a harness check; its output is not a
-result.
+committed results were produced that way, on top of the cache earlier full runs filled. The
+throughput stage does not read the cache: it runs the NLI model on its sample every time.
+`--reuse-throughput RESULTS_JSON` copies the throughput block of an earlier results file instead of
+timing again and records which run measured it; the committed results do not use it.
+`bench.tables` prints every results table in this README from the results file. `--profile smoke`
+runs the same code on a 36-response test slice as a harness check; its output is not a result.
 
 ### Data, model and their terms
 
