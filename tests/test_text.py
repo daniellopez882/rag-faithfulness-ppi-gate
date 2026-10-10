@@ -73,6 +73,11 @@ def test_abbreviations_initials_and_decimals_do_not_split() -> None:
         ("See No. 5 and Fig. 2 for details.", 1),
         ("Smith et al. (2019) found it.", 1),
         ("It opens at 5 p.m. The bar closes late.", 2),
+        ("I prefer plan B. It is cheaper.", 2),
+        ("He took vitamin C. Then he slept.", 2),
+        ("The temperature was 20 C. It rained.", 2),
+        ("George W. Bush spoke. J. A. Smith listened.", 2),
+        ("Malcolm X. He spoke in Harlem.", 2),
     ],
 )
 def test_word_like_abbreviations_and_acronyms_end_sentences_when_they_should(

@@ -28,12 +28,14 @@ ABBREVIATIONS = frozenset(
 AMBIGUOUS_ABBREVIATIONS = frozenset(
     {"no", "nos", "co", "est", "al", "fig", "vol", "mar", "sat", "sun", "wed"}
 )
-# After a dotted acronym ("U.S.", "D.C.", "p.m.") a capitalised word is usually a name ("U.S.
-# Army"); one of these openers means the acronym ended the sentence.
+# After a dotted acronym ("U.S.", "D.C.", "p.m.") or a single capital ("George W. Bush") a
+# capitalised word is usually a name; one of these openers means the sentence ended there.
 _SENTENCE_OPENERS = frozenset(
     "the a an he she it they we i you this that these those there his her its their our my "
     "in on at after before when while if as but however then also many some most each".split()
 )
+
+_NEXT_WORD = re.compile(r"[A-Za-z]+\.?")
 
 _BOUNDARY = re.compile(r"[.!?]+[\"')\]]*(?=\s)")
 _BULLET = re.compile(r"^\s*(?:[-*•]|\d{1,2}[.)])\s+")
@@ -69,6 +71,10 @@ def _strip_segment(text: str, start: int, end: int) -> Segment | None:
     return Segment(start, end, text[start:end])
 
 
+def _opens_sentence(word: str) -> bool:
+    return word[:1].isupper() and word.rstrip(".").lower() in _SENTENCE_OPENERS
+
+
 def _is_false_boundary(text: str, dot_pos: int, line_start: int) -> bool:
     """True when the punctuation at ``dot_pos`` belongs to an abbreviation or an initial."""
     if text[dot_pos] != ".":
@@ -78,6 +84,8 @@ def _is_false_boundary(text: str, dot_pos: int, line_start: int) -> bool:
     token = token.lstrip("(\"'")
     low = token.lower()
     nxt = text[dot_pos + 1 :].lstrip()
+    following = _NEXT_WORD.match(nxt)
+    word = following.group() if following else ""
     if low in ("e.g", "i.e") or low in ABBREVIATIONS:
         return True
     if low in AMBIGUOUS_ABBREVIATIONS and nxt[:1] and (nxt[0].isdigit() or nxt[0] in "(["):
@@ -85,14 +93,15 @@ def _is_false_boundary(text: str, dot_pos: int, line_start: int) -> bool:
     # "1. Preheat the oven" - a list marker at the start of a line, not a sentence.
     if re.fullmatch(r"\d{1,2}", token) and left.strip() == token:
         return True
-    # Single capital initials ("J. K. Rowling").
-    if re.fullmatch(r"[A-Z]", token):
+    # A single capital is an initial when a name follows: another initial ("J. K. Rowling") or a
+    # capitalised word that does not usually open a sentence ("George W. Bush"). "plan B. It"
+    # and "vitamin C. Then" end the sentence.
+    if re.fullmatch(r"[A-Z]", token) and (
+        re.fullmatch(r"[A-Z]\.", word) or (word[:1].isupper() and not _opens_sentence(word))
+    ):
         return True
     if re.fullmatch(r"(?:[A-Za-z]\.)+[A-Za-z]", token):
-        opener = re.match(r"[A-Za-z]+", nxt)
-        return not (
-            opener and opener.group()[0].isupper() and opener.group().lower() in _SENTENCE_OPENERS
-        )
+        return not _opens_sentence(word)
     # A lower-case continuation almost never starts a new sentence in edited text.
     return bool(nxt) and nxt[0].islower()
 
