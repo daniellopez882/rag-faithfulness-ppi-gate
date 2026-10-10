@@ -58,6 +58,7 @@ class LabelledMetrics(BaseModel):
 
 class FlaggedRow(BaseModel):
     id: str
+    score: float
     probability: float
     unit_text: str | None
     unit_score: float | None
@@ -140,14 +141,16 @@ def build_report(
     labels = np.array([r.label for r in rows if r.label is not None], dtype=int)
     rate = rate_intervals(labels, probs[has_label], probs[~has_label], confidence)
 
+    # The CRC threshold is on the raw score; without an artifact, 0.5 on the raw score.
     threshold = artifact.crc.threshold if artifact else 0.5
+    flagged_mask = flag(scores, threshold)
     metrics = None
     raw_bins: list[ReliabilityBin] = []
     cal_bins: list[ReliabilityBin] = []
     if labels.size >= 2:
         raw = np.clip(scores[has_label], 0.0, 1.0)
         cal = probs[has_label]
-        decided = cal >= threshold
+        decided = flagged_mask[has_label]
         both_classes = labels.min() != labels.max()
         metrics = LabelledMetrics(
             n=int(labels.size),
@@ -167,15 +170,19 @@ def build_report(
         cal_bins = reliability_bins(cal, labels, n_bins=10)
 
     flagged = []
-    for row, prob, is_flagged in zip(rows, probs, flag(probs, threshold), strict=True):
+    for row, score, prob, is_flagged in zip(rows, scores, probs, flagged_mask, strict=True):
         if is_flagged:
             text, unit_score = _top_unit(row)
             flagged.append(
                 FlaggedRow(
-                    id=row.id, probability=float(prob), unit_text=text, unit_score=unit_score
+                    id=row.id,
+                    score=float(score),
+                    probability=float(prob),
+                    unit_text=text,
+                    unit_score=unit_score,
                 )
             )
-    flagged.sort(key=lambda f: -f.probability)
+    flagged.sort(key=lambda f: (-f.probability, -f.score))
     return Report(
         judge=judge,
         created=dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),

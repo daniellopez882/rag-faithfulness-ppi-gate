@@ -128,7 +128,7 @@ def _cmd_calibrate(args: argparse.Namespace) -> int:
     print(
         f"{artifact.calibrator.method} on {s.n} labelled responses: ECE raw {s.ece_raw:.3f}, "
         f"calibrated {held_out}, {s.ece_calibrated_in_sample:.3f} in-sample; "
-        f"CRC {artifact.crc.risk} threshold {artifact.crc.threshold:.3f} "
+        f"CRC {artifact.crc.risk} threshold {artifact.crc.threshold:.3f} on the raw score "
         f"(alpha {artifact.crc.alpha}) -> {args.output}"
     )
     return 0

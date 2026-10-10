@@ -1,5 +1,5 @@
 """The CI gate: a hallucination-rate budget checked against a PPI upper confidence bound, and
-per-response flags from the conformal-risk-control threshold."""
+per-response flags from the conformal-risk-control threshold on the raw judge score."""
 
 from __future__ import annotations
 
@@ -53,7 +53,9 @@ class RateCheck(BaseModel):
 
 class ResponseCheck(BaseModel):
     id: str
+    score: float
     probability: float
+    # On the raw judge score: the CRC threshold, or 0.5 without a calibration artifact.
     threshold: float
     flagged: bool
     unit_text: str | None
@@ -112,7 +114,7 @@ def evaluate(config: GateConfig) -> GateOutcome:
     else:
         method = config.estimator if (~has_label).sum() >= 2 else "classical"
         estimate = estimate_rate(method, y, probs[has_label], probs[~has_label])
-        bound = interval(estimate, alpha=1 - config.confidence, alternative="upper")
+        bound = interval(estimate, alpha=1 - config.confidence, alternative="upper", kind="score")
         rate = RateCheck(
             estimator=method,
             estimate=estimate.estimate,
@@ -127,13 +129,14 @@ def evaluate(config: GateConfig) -> GateOutcome:
 
     threshold = artifact.crc.threshold if artifact else 0.5
     responses: list[ResponseCheck] = []
-    flagged = flag(probs, threshold)
-    for row, prob, is_flagged in zip(rows, probs, flagged, strict=True):
+    flagged = flag(scores, threshold)
+    for row, score, prob, is_flagged in zip(rows, scores, probs, flagged, strict=True):
         worst = max(row.units, key=lambda u: u.score) if row.units else None
         text = row.response[worst.start : worst.end] if worst and row.response else None
         responses.append(
             ResponseCheck(
                 id=row.id,
+                score=float(score),
                 probability=float(prob),
                 threshold=threshold,
                 flagged=bool(is_flagged),

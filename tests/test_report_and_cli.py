@@ -35,7 +35,7 @@ def test_report_with_partial_labels_has_all_intervals() -> None:
     assert report.metrics is not None
     assert report.metrics.n == 100
     assert report.reliability_calibrated
-    assert all(f.probability >= artifact.crc.threshold for f in report.flagged)
+    assert all(f.score >= artifact.crc.threshold for f in report.flagged)
     html = render_html(report)
     assert "<svg" in html
     assert "ppi++" in html
@@ -68,6 +68,18 @@ def test_fit_artifact_validation() -> None:
     mixed = [*_scored(20, 20), Scored(id="z", judge="other", score=0.1, label=0)]
     with pytest.raises(ValueError, match="one judge"):
         fit_artifact(mixed)
+
+
+def test_calibration_with_a_threshold_on_the_calibrated_scale_is_refused(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "calibration.json"
+    fit_artifact(_scored(100, 100, seed=1)).save(path)
+    old = json.loads(path.read_text(encoding="utf-8"))
+    del old["crc_scale"]
+    path.write_text(json.dumps(old), encoding="utf-8")
+    with pytest.raises(ValueError, match="older faithgate"):
+        CalibrationArtifact.load(path)
 
 
 def test_report_refuses_a_calibration_fitted_for_another_judge() -> None:

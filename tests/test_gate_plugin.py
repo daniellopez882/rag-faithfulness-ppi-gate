@@ -68,15 +68,29 @@ def test_per_response_items_fail_above_the_crc_threshold(pytester: pytest.Pytest
     assert outcomes["failed"] >= 1
     assert outcomes["passed"] + outcomes["failed"] == 401
     result.stdout.fnmatch_lines(
-        ["*flagged: calibrated hallucination probability*least supported unit*"]
+        ["*flagged: judge score * >= threshold *calibrated probability*least supported unit*"]
     )
+
+
+@pytest.mark.parametrize(("budget", "outcome"), [(0.05, "failed"), (0.10, "passed")])
+def test_a_clean_labelled_sample_still_has_a_positive_bound(
+    pytester: pytest.Pytester, budget: float, outcome: str
+) -> None:
+    """30 labels, none hallucinated. The bound is the score bound z^2 / (n - 1 + z^2) = 0.085,
+    not 0, so 30 clean labels can pass a 0.10 budget but not a 0.05 one."""
+    _write_gate(pytester.path, f"max_rate = {budget}\n", rate=0.0, n_labelled=30)
+    result = pytester.runpytest("--rag-gate", "gate.toml")
+    result.assert_outcomes(**{outcome: 1})
+    result.stdout.fnmatch_lines(["*lambda 0.00): estimate 0.000, 95% upper bound 0.085*"])
 
 
 def test_flags_are_counted_but_not_items_by_default(pytester: pytest.Pytester) -> None:
     _write_gate(pytester.path, "max_rate = 0.5\n", rate=0.2)
     result = pytester.runpytest("--rag-gate", "gate.toml")
     result.assert_outcomes(passed=1)
-    result.stdout.fnmatch_lines(["* of 400 responses at or above the flag threshold *for review*"])
+    result.stdout.fnmatch_lines(
+        ["* of 400 responses at or above the flag threshold * on the judge score (for review*"]
+    )
 
 
 def test_too_few_labels_fails_the_rate_item_by_default(pytester: pytest.Pytester) -> None:

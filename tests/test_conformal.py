@@ -7,7 +7,10 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from faithgate.artifacts import fit_artifact
+from faithgate.calibration import METHODS
 from faithgate.conformal import CRCThreshold, crc_threshold, flag, realised_risk
+from faithgate.records import Scored
 
 
 def draw(n: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
@@ -77,6 +80,42 @@ def test_edge_cases() -> None:
     assert flag([0.5], loose.threshold).tolist() == [False]
     with pytest.raises(ValueError, match="alpha"):
         crc_threshold([0.1], [1], alpha=0.0)
+
+
+def _rows(scores: np.ndarray, labels: np.ndarray) -> list[Scored]:
+    return [
+        Scored(id=str(i), judge="j", score=float(s), label=int(y))
+        for i, (s, y) in enumerate(zip(scores, labels, strict=True))
+    ]
+
+
+def test_threshold_does_not_depend_on_the_calibrator() -> None:
+    s, y = draw(120, np.random.default_rng(5))
+    raw = crc_threshold(s, y, alpha=0.1).threshold
+    for method in METHODS:
+        artifact = fit_artifact(_rows(s, y), method=method, alpha=0.1)
+        assert artifact.crc.threshold == raw
+        assert artifact.flags(s).tolist() == (s >= raw).tolist()
+
+
+@pytest.mark.parametrize("method", ["platt", "histogram"])
+def test_risk_is_controlled_through_fit_artifact(method: str) -> None:
+    """The calibrator is fitted on the same labels the threshold is chosen on. With a judge that
+    carries no signal Platt takes its direction from noise, and a threshold picked on its output
+    let 0.217 slip through at alpha 0.2 with this seed; histogram bins need not be monotone
+    either. The artifact flags on the raw score, which was fixed before the labels were seen."""
+    rng = np.random.default_rng(17)
+    alpha, theta, n, reps = 0.2, 0.4, 30, 600
+    fresh = np.linspace(0.0, 1.0, 2001)  # new scores are U(0, 1), independent of the label
+    risks: list[float] = []
+    while len(risks) < reps:
+        s, y = rng.uniform(size=n), (rng.uniform(size=n) < theta).astype(int)
+        if y.min() == y.max():
+            continue
+        artifact = fit_artifact(_rows(s, y), method=method, alpha=alpha)  # type: ignore[arg-type]
+        risks.append(theta * float(np.mean(~artifact.flags(fresh))))
+    mean_risk = float(np.mean(risks))
+    assert mean_risk <= alpha + 3 * float(np.std(risks)) / math.sqrt(reps)
 
 
 def test_infinite_threshold_survives_json() -> None:

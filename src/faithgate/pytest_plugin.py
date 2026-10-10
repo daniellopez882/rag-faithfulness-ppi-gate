@@ -4,7 +4,7 @@
   exceeds ``max_rate``. With fewer than ``min_labelled`` human labels there is no bound; the item
   then fails, or is skipped when ``too_few_labels = "skip"``.
 * ``rag_gate_response[<id>]`` (only with ``per_response = true``) fails for each response whose
-  calibrated probability reaches the conformal-risk-control threshold.
+  raw judge score reaches the conformal-risk-control threshold.
 """
 
 from __future__ import annotations
@@ -95,8 +95,8 @@ class ResponseItem(_GateItem):
                 else ""
             )
             raise GateError(
-                f"response {c.id} flagged: calibrated hallucination probability "
-                f"{c.probability:.3f} >= threshold {c.threshold:.3f}{detail}"
+                f"response {c.id} flagged: judge score {c.score:.3f} >= threshold "
+                f"{c.threshold:.3f} (calibrated probability {c.probability:.3f}){detail}"
             )
 
 
@@ -162,5 +162,5 @@ def pytest_terminal_summary(
         )
         terminalreporter.write_line(
             f"{flagged} of {len(outcome.responses)} responses at or above the flag threshold "
-            f"{outcome.responses[0].threshold:.3f} ({where})"
+            f"{outcome.responses[0].threshold:.3f} on the judge score ({where})"
         )
