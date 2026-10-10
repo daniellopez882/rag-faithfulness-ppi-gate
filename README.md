@@ -1,5 +1,7 @@
 # rag-faithfulness-ppi-gate
 
+[![ci](https://github.com/daniellopez882/rag-faithfulness-ppi-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/daniellopez882/rag-faithfulness-ppi-gate/actions/workflows/ci.yml) ![python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white) ![licence](https://img.shields.io/badge/licence-MIT-green)
+
 A statistical check on how often a RAG system makes things up. A cheap judge (SummaC-style NLI
 with a 13M-parameter model, or a unigram-overlap baseline) scores every response; a small random
 sample of human labels corrects the judge's bias through prediction-powered inference (PPI/PPI++);
