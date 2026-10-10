@@ -559,6 +559,11 @@ def low_rate_experiment(
         "nominal_coverage_upper": 1 - alpha,
         "reps": profile.ppi_reps,
         "batch": "all faithful test responses plus a random subset of the hallucinated ones",
+        # What a labelled sample with no hallucination in it bounds the rate at; Wald says 0.
+        "score_upper_bound_with_no_hallucinated_label": {
+            str(n): interval(classical_mean(np.zeros(n)), alpha, alternative="upper").upper
+            for n in profile.low_rate_ns
+        },
         "by_rate": {},
     }
     by_rate: dict[str, object] = {}
