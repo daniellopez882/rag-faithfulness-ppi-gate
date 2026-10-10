@@ -121,9 +121,15 @@ def _cmd_calibrate(args: argparse.Namespace) -> int:
     artifact = fit_artifact(rows, method=args.method, alpha=args.alpha, risk=args.risk)
     artifact.save(args.output)
     s = artifact.summary
+    held_out = (
+        f"{s.ece_calibrated_cv:.3f} with {s.cv_folds}-fold cross-validation"
+        if s.ece_calibrated_cv is not None
+        else "not cross-validated (too few rows of one class)"
+    )
     print(
-        f"{artifact.calibrator.method} on {s.n} labelled responses: ECE {s.ece_raw:.3f} -> "
-        f"{s.ece_calibrated:.3f}; CRC {artifact.crc.risk} threshold {artifact.crc.threshold:.3f} "
+        f"{artifact.calibrator.method} on {s.n} labelled responses: ECE raw {s.ece_raw:.3f}, "
+        f"calibrated {held_out}, {s.ece_calibrated_in_sample:.3f} in-sample; "
+        f"CRC {artifact.crc.risk} threshold {artifact.crc.threshold:.3f} "
         f"(alpha {artifact.crc.alpha}) -> {args.output}"
     )
     return 0
@@ -207,7 +213,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except ValueError as exc:
+        raise SystemExit(f"faithgate {args.command}: {exc}") from exc
 
 
 if __name__ == "__main__":

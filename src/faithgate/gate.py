@@ -10,7 +10,7 @@ from typing import Literal
 import numpy as np
 from pydantic import BaseModel, Field
 
-from faithgate.artifacts import CalibrationArtifact
+from faithgate.artifacts import CalibrationArtifact, judge_of
 from faithgate.conformal import flag
 from faithgate.ppi import estimate_rate, interval
 from faithgate.records import Scored, read_jsonl
@@ -26,7 +26,12 @@ class GateConfig(BaseModel):
     confidence: float = Field(default=0.95, gt=0.5, lt=1)
     estimator: Literal["ppi++", "ppi", "classical"] = "ppi++"
     min_labelled: int = Field(default=30, ge=2)
-    per_response: bool = True
+    # Below min_labelled there is no bound to check. By default that fails the gate instead of
+    # letting the build pass unchecked.
+    too_few_labels: Literal["fail", "skip"] = "fail"
+    # Per-response items fail the build for every flagged response. With a weak judge the CRC
+    # threshold flags most responses, so they are opt-in; the report lists the flags either way.
+    per_response: bool = False
 
 
 class LabelRow(BaseModel):
@@ -88,7 +93,10 @@ def evaluate(config: GateConfig) -> GateOutcome:
         raise ValueError(f"{config.scores} is empty")
     if config.labels is not None:
         rows = _attach_labels(rows, config.labels)
+    judge = judge_of(rows)
     artifact = CalibrationArtifact.load(config.calibration) if config.calibration else None
+    if artifact is not None:
+        artifact.check_judge(judge)
     scores = np.array([r.score for r in rows], dtype=float)
     probs = artifact.probabilities(scores) if artifact else np.clip(scores, 0.0, 1.0)
 
@@ -117,21 +125,20 @@ def evaluate(config: GateConfig) -> GateOutcome:
             passed=bound.upper <= config.max_rate,
         )
 
+    threshold = artifact.crc.threshold if artifact else 0.5
     responses: list[ResponseCheck] = []
-    if config.per_response:
-        threshold = artifact.crc.threshold if artifact else 0.5
-        flagged = flag(probs, threshold)
-        for row, prob, is_flagged in zip(rows, probs, flagged, strict=True):
-            worst = max(row.units, key=lambda u: u.score) if row.units else None
-            text = row.response[worst.start : worst.end] if worst and row.response else None
-            responses.append(
-                ResponseCheck(
-                    id=row.id,
-                    probability=float(prob),
-                    threshold=threshold,
-                    flagged=bool(is_flagged),
-                    unit_text=text,
-                    unit_score=worst.score if worst else None,
-                )
+    flagged = flag(probs, threshold)
+    for row, prob, is_flagged in zip(rows, probs, flagged, strict=True):
+        worst = max(row.units, key=lambda u: u.score) if row.units else None
+        text = row.response[worst.start : worst.end] if worst and row.response else None
+        responses.append(
+            ResponseCheck(
+                id=row.id,
+                probability=float(prob),
+                threshold=threshold,
+                flagged=bool(is_flagged),
+                unit_text=text,
+                unit_score=worst.score if worst else None,
             )
+        )
     return GateOutcome(config=config, rate=rate, rate_skipped=skipped, responses=responses)

@@ -70,6 +70,26 @@ def test_fit_artifact_validation() -> None:
         fit_artifact(mixed)
 
 
+def test_report_refuses_a_calibration_fitted_for_another_judge() -> None:
+    artifact = fit_artifact(_scored(100, 100, seed=1), method="isotonic")
+    other = [r.model_copy(update={"judge": "always-hallucinated"}) for r in _scored(30, 10)]
+    with pytest.raises(ValueError, match="fitted on 'j' scores"):
+        build_report(other, artifact)
+
+
+def test_fit_summary_reports_cross_validated_ece() -> None:
+    summary = fit_artifact(_scored(300, 300, seed=4), method="isotonic").summary
+    assert summary.cv_folds == 5
+    assert summary.ece_calibrated_cv is not None
+    # Isotonic fits its own rows almost exactly; held-out rows are where the error shows.
+    assert summary.ece_calibrated_in_sample < summary.ece_calibrated_cv
+    few = [*_scored(12, 12, seed=5)]
+    few = [r.model_copy(update={"label": 0}) for r in few[:-1]] + [
+        few[-1].model_copy(update={"label": 1})
+    ]
+    assert fit_artifact(few, method="platt").summary.ece_calibrated_cv is None
+
+
 def _run(*args: object) -> int:
     return main([str(a) for a in args])
 

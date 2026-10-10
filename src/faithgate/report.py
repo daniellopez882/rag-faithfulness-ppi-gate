@@ -11,7 +11,7 @@ import numpy as np
 from jinja2 import Environment, PackageLoader, select_autoescape
 from pydantic import BaseModel
 
-from faithgate.artifacts import CalibrationArtifact
+from faithgate.artifacts import CalibrationArtifact, judge_of
 from faithgate.calibration import (
     ReliabilityBin,
     brier_score,
@@ -131,6 +131,9 @@ def build_report(
 ) -> Report:
     if not rows:
         raise ValueError("nothing to report")
+    judge = judge_of(rows)
+    if artifact is not None:
+        artifact.check_judge(judge)
     scores = np.array([r.score for r in rows], dtype=float)
     probs = artifact.probabilities(scores) if artifact else np.clip(scores, 0.0, 1.0)
     has_label = np.array([r.label is not None for r in rows])
@@ -174,7 +177,7 @@ def build_report(
             )
     flagged.sort(key=lambda f: -f.probability)
     return Report(
-        judge=rows[0].judge,
+        judge=judge,
         created=dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         n=len(rows),
         n_labelled=int(labels.size),

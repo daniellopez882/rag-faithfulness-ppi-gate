@@ -1,8 +1,9 @@
 """pytest plugin: ``pytest --rag-gate rag-gate.toml`` adds gate items to the session.
 
 * ``rag_gate_rate`` fails when the one-sided upper confidence bound on the hallucination rate
-  exceeds ``max_rate`` (skipped when there are fewer than ``min_labelled`` human labels).
-* ``rag_gate_response[<id>]`` (with ``per_response = true``) fails for each response whose
+  exceeds ``max_rate``. With fewer than ``min_labelled`` human labels there is no bound; the item
+  then fails, or is skipped when ``too_few_labels = "skip"``.
+* ``rag_gate_response[<id>]`` (only with ``per_response = true``) fails for each response whose
   calibrated probability reaches the conformal-risk-control threshold.
 """
 
@@ -49,14 +50,28 @@ class _GateItem(pytest.Item):
 
 
 class RateItem(_GateItem):
-    def __init__(self, *, check: RateCheck | None, skipped: str | None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *,
+        check: RateCheck | None,
+        skipped: str | None,
+        too_few_labels: str,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self.check = check
         self.skipped = skipped
+        self.too_few_labels = too_few_labels
 
     def runtest(self) -> None:
         if self.check is None:
-            pytest.skip(self.skipped or "rate check not computed")
+            reason = self.skipped or "rate check not computed"
+            if self.too_few_labels == "skip":
+                pytest.skip(reason)
+            raise GateError(
+                f"no rate bound: {reason}. Label more responses, or set "
+                'too_few_labels = "skip" to let the build pass without a bound.'
+            )
         c = self.check
         if not c.passed:
             raise GateError(
@@ -92,8 +107,14 @@ class GateFile(pytest.File):
 
     def collect(self) -> Iterator[pytest.Item]:
         yield RateItem.from_parent(
-            self, name="rag_gate_rate", check=self.outcome.rate, skipped=self.outcome.rate_skipped
+            self,
+            name="rag_gate_rate",
+            check=self.outcome.rate,
+            skipped=self.outcome.rate_skipped,
+            too_few_labels=self.outcome.config.too_few_labels,
         )
+        if not self.outcome.config.per_response:
+            return
         for check in self.outcome.responses:
             yield ResponseItem.from_parent(self, name=f"rag_gate_response[{check.id}]", check=check)
 
@@ -131,10 +152,15 @@ def pytest_terminal_summary(
             f"[{r.n_labelled} labelled, {r.n_unlabelled} unlabelled]"
         )
     else:
-        terminalreporter.write_line(f"rate check skipped: {outcome.rate_skipped}")
+        terminalreporter.write_line(f"no rate bound: {outcome.rate_skipped}")
     if outcome.responses:
         flagged = sum(c.flagged for c in outcome.responses)
+        where = (
+            "one failing item each"
+            if outcome.config.per_response
+            else "for review, listed by `faithgate report`"
+        )
         terminalreporter.write_line(
             f"{flagged} of {len(outcome.responses)} responses at or above the flag threshold "
-            f"{outcome.responses[0].threshold:.3f}"
+            f"{outcome.responses[0].threshold:.3f} ({where})"
         )

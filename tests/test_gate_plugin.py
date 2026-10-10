@@ -72,13 +72,52 @@ def test_per_response_items_fail_above_the_crc_threshold(pytester: pytest.Pytest
     )
 
 
-def test_too_few_labels_skips_the_rate_item(pytester: pytest.Pytester) -> None:
+def test_flags_are_counted_but_not_items_by_default(pytester: pytest.Pytester) -> None:
+    _write_gate(pytester.path, "max_rate = 0.5\n", rate=0.2)
+    result = pytester.runpytest("--rag-gate", "gate.toml")
+    result.assert_outcomes(passed=1)
+    result.stdout.fnmatch_lines(["* of 400 responses at or above the flag threshold *for review*"])
+
+
+def test_too_few_labels_fails_the_rate_item_by_default(pytester: pytest.Pytester) -> None:
+    _write_gate(pytester.path, "max_rate = 0.3\nmin_labelled = 100\n", n_labelled=20)
+    result = pytester.runpytest("--rag-gate", "gate.toml")
+    result.assert_outcomes(failed=1)
+    result.stdout.fnmatch_lines(
+        ["*no rate bound: 20 labelled responses, fewer than min_labelled=100*"]
+    )
+
+
+def test_too_few_labels_can_skip_instead(pytester: pytest.Pytester) -> None:
     _write_gate(
-        pytester.path, "max_rate = 0.3\nper_response = false\nmin_labelled = 100\n", n_labelled=20
+        pytester.path,
+        'max_rate = 0.3\nmin_labelled = 100\ntoo_few_labels = "skip"\n',
+        n_labelled=20,
     )
     result = pytester.runpytest("--rag-gate", "gate.toml", "-rs")
     result.assert_outcomes(skipped=1)
     result.stdout.fnmatch_lines(["*fewer than min_labelled=100*"])
+
+
+def test_calibration_from_another_judge_is_a_usage_error(pytester: pytest.Pytester) -> None:
+    _write_gate(pytester.path, "max_rate = 0.3\n")
+    rows = [r.model_copy(update={"judge": "always-hallucinated"}) for r in _rows(50, 40, 0.2, 3)]
+    write_jsonl(pytester.path / "scores.jsonl", rows)
+    result = pytester.runpytest("--rag-gate", "gate.toml")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(
+        ["*fitted on 'overlap' scores but the scores come from 'always-hallucinated'*"]
+    )
+
+
+def test_scores_from_two_judges_are_a_usage_error(pytester: pytest.Pytester) -> None:
+    _write_gate(pytester.path, "max_rate = 0.3\n")
+    rows = _rows(50, 40, 0.2, 3)
+    rows[0] = rows[0].model_copy(update={"judge": "nli-zs-mean"})
+    write_jsonl(pytester.path / "scores.jsonl", rows)
+    result = pytester.runpytest("--rag-gate", "gate.toml")
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*expected rows from one judge*"])
 
 
 def test_keyword_selection_and_coexistence_with_tests(pytester: pytest.Pytester) -> None:
