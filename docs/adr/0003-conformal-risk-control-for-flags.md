@@ -1,6 +1,6 @@
 # ADR 0003: Conformal risk control for the per-response flag threshold
 
-Status: accepted
+Status: accepted; ADR 0007 moves the threshold from the calibrated probability to the raw score
 
 ## Context
 

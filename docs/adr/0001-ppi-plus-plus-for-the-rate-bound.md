@@ -1,6 +1,7 @@
 # ADR 0001: PPI++ upper bound as the gate's rate check
 
-Status: accepted
+Status: accepted; the bound's construction (Wald) and the unclipped lambda are superseded by
+ADR 0006
 
 ## Context
 

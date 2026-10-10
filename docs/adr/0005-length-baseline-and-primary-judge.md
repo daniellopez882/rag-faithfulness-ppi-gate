@@ -31,6 +31,11 @@ AUROC.
   noisy-OR over units, where a longer response really does have more chances to contain one
   unsupported claim. The length-matched AUROC shows how much the judge adds beyond that.
 
+Later the README renamed the length-matched AUROC to "task- and length-matched", because its
+strata hold task type fixed as well, and the benchmark added a task-matched AUROC so the drop
+from the pooled figure can be split between task-type base rates and length. The JSON keys are
+now `dev_auroc_task_length_matched` and `meta_eval.*.auroc_task_length_matched`.
+
 ## Consequences
 
 * The README states plainly how much of each judge's pooled AUROC is length. On test the
