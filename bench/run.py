@@ -42,6 +42,7 @@ from faithgate.metrics import (
     best_f1_threshold,
     cohen_kappa,
     krippendorff_alpha,
+    matched_auroc,
     precision_recall_f1,
 )
 from faithgate.nli import EntailmentModel, load_default_nli
@@ -52,7 +53,7 @@ from faithgate.records import Record, Scored
 from faithgate.report import reliability_svg
 from faithgate.spans import SpanScores, localise, span_scores
 from faithgate.summac import ChunkConfig, ConvAggregator, ConvMode, NLIMatrix, layout
-from faithgate.text import vocabulary
+from faithgate.text import Segment, vocabulary
 
 _START = time.perf_counter()
 
@@ -115,7 +116,8 @@ NLI_JUDGES = ("nli-zs-mean", "nli-zs-min", "nli-conv-mean", "nli-conv-max")
 
 
 class MatrixCache:
-    """NLI rows per response, appended to a JSONL file keyed by id and a digest of the texts."""
+    """NLI rows per response, appended to a JSONL file keyed by id and a digest of the unit and
+    chunk texts that were paired."""
 
     def __init__(self, model: EntailmentModel, config: ChunkConfig) -> None:
         self.config = config
@@ -129,11 +131,19 @@ class MatrixCache:
                     self.entries[row["id"]] = (row["digest"], row["probs"])
 
     @staticmethod
-    def digest(record: Record) -> str:
-        return hashlib.sha1(f"{record.source}\0{record.response}".encode()).hexdigest()
+    def digest(units: Sequence[Segment], chunks: Sequence[Segment]) -> str:
+        # Keyed on the paired texts rather than on source and response, so a change to the
+        # splitter or the chunker re-scores exactly the responses whose matrix it changes.
+        text = "\x1f".join(u.text for u in units) + "\x1e" + "\x1f".join(c.text for c in chunks)
+        return hashlib.sha1(text.encode()).hexdigest()
 
     def matrices(self, records: Sequence[Record], label: str) -> list[NLIMatrix]:
-        missing = [r for r in records if self.entries.get(r.id, ("",))[0] != self.digest(r)]
+        layouts = [layout(r.source, r.response, self.config) for r in records]
+        missing = [
+            r
+            for r, (units, chunks) in zip(records, layouts, strict=True)
+            if self.entries.get(r.id, ("",))[0] != self.digest(units, chunks)
+        ]
         if missing:
             log(f"NLI {self.config.key()} on {label}: {len(missing)} of {len(records)} uncached")
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,20 +153,17 @@ class MatrixCache:
                     batch = missing[start : start + 64]
                     for record, matrix in zip(batch, self.judge.matrices(batch), strict=True):
                         probs = np.round(matrix.probs, 6).tolist()
-                        self.entries[record.id] = (self.digest(record), probs)
+                        digest = self.digest(matrix.units, matrix.chunks)
+                        self.entries[record.id] = (digest, probs)
                         handle.write(
-                            json.dumps(
-                                {"id": record.id, "digest": self.digest(record), "probs": probs}
-                            )
-                            + "\n"
+                            json.dumps({"id": record.id, "digest": digest, "probs": probs}) + "\n"
                         )
                     handle.flush()
                     done = start + len(batch)
                     rate = done / (time.perf_counter() - started)
                     log(f"  {done}/{len(missing)} responses, {rate:.2f}/s")
         out = []
-        for record in records:
-            units, chunks = layout(record.source, record.response, self.config)
+        for record, (units, chunks) in zip(records, layouts, strict=True):
             probs = np.asarray(self.entries[record.id][1], dtype=float).reshape(
                 len(units), len(chunks)
             )
@@ -241,18 +248,35 @@ def evaluate_judge(
     test_s: np.ndarray,
     test_y: np.ndarray,
     tasks: np.ndarray,
+    strata: np.ndarray,
     profile: Profile,
-    calibrate: bool = True,
+    methods: Sequence[str] = tuple(m for m in METHODS if m != "none"),
+    probabilistic: bool = True,
 ) -> dict[str, object]:
+    """Ranking, decision and calibration metrics of one judge on test.
+
+    ``strata`` (task type and response length in units) defines the length-matched AUROC.
+    Scores that are not probabilities (a unit count) get no raw-probability metrics.
+    """
     raw = np.clip(test_s, 0.0, 1.0)
     threshold = best_f1_threshold(cal_y, cal_s)
     tuned = test_s >= threshold
+    matched, pairs = matched_auroc(test_y, test_s, strata)
     result: dict[str, object] = {
         "auroc": auroc(test_y, test_s),
         "auroc_ci95": stratified_bootstrap(
             lambda i: auroc(test_y[i], test_s[i]), test_y.size, tasks, profile.bootstrap, seed=1
         ).model_dump(),
-        "uncalibrated_at_0.5": _prf(test_y, raw >= 0.5),
+        "auroc_length_matched": matched,
+        "auroc_length_matched_ci95": stratified_bootstrap(
+            lambda i: matched_auroc(test_y[i], test_s[i], strata[i])[0],
+            test_y.size,
+            tasks,
+            profile.bootstrap,
+            seed=3,
+        ).model_dump(),
+        "length_matched_pairs": pairs,
+        "uncalibrated_at_0.5": _prf(test_y, raw >= 0.5) if probabilistic else None,
         "tuned_threshold": threshold,
         "at_tuned_threshold": _prf(test_y, tuned),
         "f1_at_tuned_threshold_ci95": stratified_bootstrap(
@@ -262,25 +286,22 @@ def evaluate_judge(
             profile.bootstrap,
             seed=2,
         ).model_dump(),
-        "ece_raw": expected_calibration_error(raw, test_y),
-        "mce_raw": maximum_calibration_error(raw, test_y),
-        "brier_raw": brier_score(raw, test_y),
+        "ece_raw": expected_calibration_error(raw, test_y) if probabilistic else None,
+        "mce_raw": maximum_calibration_error(raw, test_y) if probabilistic else None,
+        "brier_raw": brier_score(raw, test_y) if probabilistic else None,
     }
     calibrated: dict[str, dict[str, object]] = {}
     fitted: dict[str, Calibrator] = {}
-    if calibrate:
-        for method in METHODS:
-            if method == "none":
-                continue
-            calibrator = make_calibrator(method).fit(cal_s, cal_y)
-            fitted[method] = calibrator
-            probs = calibrator.predict(test_s)
-            calibrated[method] = {
-                "ece": expected_calibration_error(probs, test_y),
-                "mce": maximum_calibration_error(probs, test_y),
-                "brier": brier_score(probs, test_y),
-                "at_0.5": _prf(test_y, probs >= 0.5),
-            }
+    for method in methods:
+        calibrator = make_calibrator(method).fit(cal_s, cal_y)
+        fitted[method] = calibrator
+        probs = calibrator.predict(test_s)
+        calibrated[method] = {
+            "ece": expected_calibration_error(probs, test_y),
+            "mce": maximum_calibration_error(probs, test_y),
+            "brier": brier_score(probs, test_y),
+            "at_0.5": _prf(test_y, probs >= 0.5),
+        }
     result["calibrated"] = calibrated
     per_task: dict[str, dict[str, object]] = {}
     for task in TASK_TYPES:
@@ -292,16 +313,14 @@ def evaluate_judge(
             "n": int(mask.sum()),
             "positive_rate": float(y_t.mean()),
             "auroc": auroc(y_t, s_t) if 0 < y_t.sum() < y_t.size else None,
+            "auroc_length_matched": matched_auroc(y_t, s_t, strata[mask])[0],
             "f1_at_tuned_threshold": precision_recall_f1(y_t, tuned[mask]).f1,
-            "ece_raw": expected_calibration_error(raw[mask], y_t),
+            "ece_raw": expected_calibration_error(raw[mask], y_t) if probabilistic else None,
         }
-        if calibrate:
-            entry["ece_isotonic_global"] = expected_calibration_error(
-                fitted["isotonic"].predict(s_t), y_t
-            )
-            entry["f1_isotonic_global_at_0.5"] = precision_recall_f1(
-                y_t, fitted["isotonic"].predict(s_t) >= 0.5
-            ).f1
+        if "isotonic" in fitted:
+            iso_t = fitted["isotonic"].predict(s_t)
+            entry["ece_isotonic_global"] = expected_calibration_error(iso_t, y_t)
+            entry["f1_isotonic_global_at_0.5"] = precision_recall_f1(y_t, iso_t >= 0.5).f1
         per_task[task] = entry
     result["per_task"] = per_task
     return result
@@ -550,7 +569,26 @@ def _reliability_figure(raw: np.ndarray, calibrated: np.ndarray, y: np.ndarray, 
     path.write_text(svg.replace(">", ">" + style, 1), encoding="utf-8")
 
 
-def run(profile: Profile, out_path: Path, argv: Sequence[str]) -> dict[str, object]:
+def reused_throughput(path: Path, config: ChunkConfig) -> dict[str, object]:
+    """The throughput block of an earlier results file, labelled with the run that measured it."""
+    previous = json.loads(path.read_text(encoding="utf-8"))
+    block = dict(previous["throughput"])
+    if block["nli"]["config"] != config.key():
+        raise SystemExit(f"{path} timed {block['nli']['config']}, this run uses {config.key()}")
+    block.setdefault(
+        "measured_in",
+        {
+            "git_sha": previous["git_sha"],
+            "date": previous["date"],
+            "note": "copied from that run's results file; not re-measured in this run",
+        },
+    )
+    return block
+
+
+def run(
+    profile: Profile, out_path: Path, argv: Sequence[str], reuse_throughput: Path | None = None
+) -> dict[str, object]:
     timings: dict[str, float] = {}
     stage = time.perf_counter()
 
@@ -593,28 +631,50 @@ def run(profile: Profile, out_path: Path, argv: Sequence[str]) -> dict[str, obje
             "dev": judge.score(dev),
         }
     y_dev, y_cal, y_test = _labels(dev), _labels(calib), _labels(test)
-    dev_auroc = {name: auroc(y_dev, [s.score for s in judged[name]["dev"]]) for name in NLI_JUDGES}
-    primary = max(dev_auroc, key=lambda k: dev_auroc[k])
-    log(f"dev AUROC {dev_auroc}; primary judge {primary}")
-
-    tasks = np.array([r.task_type for r in test])
-    cal_tasks = np.array([r.task_type for r in calib])
     scores = {
         name: {split: np.array([s.score for s in rows]) for split, rows in d.items()}
         for name, d in judged.items()
     }
+    # The length baseline: how many checkable units the NLI judges pool over, with no model.
+    # SummaC-Conv's log-sum-exp pooling adds about log(units) to the response logit, so any
+    # judge has to beat this to show that it reads the source at all.
+    scores["length"] = {
+        split: np.array([len(m.units) for m in mats], dtype=float)
+        for split, mats in (("calib", calib_m), ("test", test_m), ("dev", dev_m))
+    }
+
+    def strata(records: Sequence[Record], units: np.ndarray) -> np.ndarray:
+        return np.array([f"{r.task_type}|{int(n)}" for r, n in zip(records, units, strict=True)])
+
+    dev_strata = strata(dev, scores["length"]["dev"])
+    dev_auroc = {name: auroc(y_dev, scores[name]["dev"]) for name in NLI_JUDGES}
+    dev_matched = {
+        name: matched_auroc(y_dev, scores[name]["dev"], dev_strata)[0] for name in NLI_JUDGES
+    }
+    primary = max(dev_auroc, key=lambda k: dev_auroc[k])
+    log(f"dev AUROC {dev_auroc}; length-matched {dev_matched}; primary judge {primary}")
+
+    tasks = np.array([r.task_type for r in test])
+    cal_tasks = np.array([r.task_type for r in calib])
+    test_strata = strata(test, scores["length"]["test"])
     meta: dict[str, dict[str, object]] = {}
     thresholds: dict[str, float] = {}
-    for name in judged:
+    for name in scores:
         thresholds[name] = best_f1_threshold(y_cal, scores[name]["calib"])
+        options: dict[str, object] = {}
+        if name == "always-hallucinated":
+            options["methods"] = ()
+        elif name == "length":
+            options = {"methods": ("isotonic",), "probabilistic": False}
         meta[name] = evaluate_judge(
             scores[name]["calib"],
             y_cal,
             scores[name]["test"],
             y_test,
             tasks,
+            test_strata,
             profile,
-            calibrate=name != "always-hallucinated",
+            **options,  # type: ignore[arg-type]
         )
         if name != "always-hallucinated":
             meta[name]["isotonic_per_task"] = per_task_calibration(
@@ -626,7 +686,8 @@ def run(profile: Profile, out_path: Path, argv: Sequence[str]) -> dict[str, obje
     lap("spans")
 
     iso = {
-        n: make_calibrator("isotonic").fit(scores[n]["calib"], y_cal) for n in (primary, "overlap")
+        n: make_calibrator("isotonic").fit(scores[n]["calib"], y_cal)
+        for n in (primary, "overlap", "length")
     }
     decisions = {
         name: (scores[name]["test"] >= thresholds[name]).astype(int)
@@ -650,6 +711,7 @@ def run(profile: Profile, out_path: Path, argv: Sequence[str]) -> dict[str, obje
         f"{primary} (isotonic)": iso[primary].predict(scores[primary]["test"]),
         f"{primary} (raw score)": np.clip(scores[primary]["test"], 0, 1),
         "overlap (isotonic)": iso["overlap"].predict(scores["overlap"]["test"]),
+        "length (isotonic)": iso["length"].predict(scores["length"]["test"]),
     }
     ppi = ppi_experiment(y_test, ppi_judges, profile)
     lap("ppi")
@@ -664,7 +726,10 @@ def run(profile: Profile, out_path: Path, argv: Sequence[str]) -> dict[str, obje
     crc["judge"] = f"{primary} (isotonic)"
     lap("crc")
 
-    speed = throughput(test, model, config, profile)
+    if reuse_throughput is None:
+        speed = throughput(test, model, config, profile)
+    else:
+        speed = reused_throughput(reuse_throughput, config)
     lap("throughput")
 
     timings["total"] = round(time.perf_counter() - _START, 1)
@@ -697,7 +762,13 @@ def run(profile: Profile, out_path: Path, argv: Sequence[str]) -> dict[str, obje
         "timings_seconds": timings,
         "chunk_selection": chunk_selection,
         "dev_auroc": dev_auroc,
+        "dev_auroc_length_matched": dev_matched,
         "primary_judge": primary,
+        "primary_rule": "highest dev AUROC among the NLI judges",
+        "length_baseline": {
+            "score": f"number of checkable {config.unit} units in the response",
+            "strata_for_matched_auroc": f"task type x number of {config.unit} units",
+        },
         "conv": conv_info,
         "meta_eval": meta,
         "spans": spans,
@@ -723,11 +794,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--out", type=Path, default=None, help="results JSON (default bench/results/<profile>.json)"
     )
+    parser.add_argument(
+        "--reuse-throughput",
+        type=Path,
+        default=None,
+        metavar="RESULTS_JSON",
+        help="copy the throughput block from an earlier results file instead of timing again",
+    )
     args = parser.parse_args(args_list)
     profile = PROFILES[args.profile]
     out_path = args.out or Path(__file__).resolve().parent / "results" / f"{profile.name}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    results = run(profile, out_path, args_list)
+    results = run(profile, out_path, args_list, args.reuse_throughput)
     out_path.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     log(f"wrote {out_path}")
     return 0

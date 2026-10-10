@@ -1,5 +1,5 @@
-"""Classification and agreement metrics: precision/recall/F1, AUROC, Cohen's kappa and
-Krippendorff's alpha."""
+"""Classification and agreement metrics: precision/recall/F1, AUROC (pooled and matched within
+strata), Cohen's kappa and Krippendorff's alpha."""
 
 from __future__ import annotations
 
@@ -46,6 +46,34 @@ def auroc(y_true: Sequence[int] | np.ndarray, scores: Sequence[float] | np.ndarr
         raise ValueError("AUROC needs both classes")
     ranks = rankdata(np.asarray(scores, dtype=float), method="average")
     return float((ranks[t].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
+
+
+def matched_auroc(
+    y_true: Sequence[int] | np.ndarray,
+    scores: Sequence[float] | np.ndarray,
+    strata: Sequence[str] | np.ndarray,
+) -> tuple[float, int]:
+    """AUROC over only the positive-negative pairs that share a stratum, and the number of pairs.
+
+    With strata built from task type and response length, it asks whether a score ranks a
+    hallucinated response above a faithful one of the same task and the same length, which a
+    score that merely grows with length cannot do: it scores 0.5.
+    """
+    t = np.asarray(y_true, dtype=bool)
+    s = np.asarray(scores, dtype=float)
+    g = np.asarray(strata)
+    weighted = 0.0
+    pairs = 0
+    for key in np.unique(g):
+        inside = g == key
+        n_pos = int(t[inside].sum())
+        n_neg = int(inside.sum()) - n_pos
+        if n_pos and n_neg:
+            weighted += auroc(t[inside], s[inside]) * n_pos * n_neg
+            pairs += n_pos * n_neg
+    if not pairs:
+        raise ValueError("no stratum holds both classes")
+    return weighted / pairs, pairs
 
 
 def best_f1_threshold(

@@ -39,7 +39,11 @@ RAGTRUTH_FILES: tuple[DatasetFile, ...] = (
         size=15117971,
     ),
 )
-RAGTRUTH_LICENSE = "MIT (ParticleMedia/RAGTruth)"
+RAGTRUTH_LICENSE = (
+    "MIT for the RAGTruth annotations and code (ParticleMedia/RAGTruth); the source passages come "
+    "from MS MARCO, CNN/Daily Mail and recent news articles, and the Yelp Open Dataset, under "
+    "their own terms"
+)
 
 NLI_REPO = "MoritzLaurer/xtremedistil-l6-h256-zeroshot-v1.1-all-33"
 NLI_REVISION = "c07f66d9cbf781191bee66edfe8ad7856f045781"

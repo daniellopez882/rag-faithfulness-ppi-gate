@@ -17,6 +17,7 @@ from faithgate.metrics import (
     best_f1_threshold,
     cohen_kappa,
     krippendorff_alpha,
+    matched_auroc,
     precision_recall_f1,
 )
 
@@ -99,3 +100,33 @@ def test_best_f1_threshold_is_optimal(data: tuple[list[int], list[float]]) -> No
     chosen = best_f1_threshold(y, s)
     best = max(precision_recall_f1(y, s >= t).f1 for t in np.unique(s))
     assert precision_recall_f1(y, s >= chosen).f1 == pytest.approx(best)
+
+
+@given(
+    st.lists(
+        st.tuples(st.integers(0, 1), st.sampled_from([0.0, 0.3, 0.5, 0.9]), st.sampled_from("ab")),
+        min_size=2,
+        max_size=40,
+    )
+)
+@settings(max_examples=200, deadline=None)
+def test_matched_auroc_counts_only_pairs_within_a_stratum(
+    rows: list[tuple[int, float, str]],
+) -> None:
+    pairs = [(p[1], n[1]) for p in rows for n in rows if p[0] == 1 and n[0] == 0 and p[2] == n[2]]
+    if not pairs:
+        with pytest.raises(ValueError, match="no stratum"):
+            matched_auroc(*zip(*rows, strict=True))
+        return
+    wins = sum(1.0 if a > b else 0.5 if a == b else 0.0 for a, b in pairs)
+    value, count = matched_auroc(*zip(*rows, strict=True))
+    assert count == len(pairs)
+    assert value == pytest.approx(wins / len(pairs))
+
+
+def test_a_score_that_only_tracks_the_stratum_is_at_chance() -> None:
+    rng = np.random.default_rng(0)
+    length = rng.integers(1, 6, size=500)
+    y = (rng.uniform(size=500) < length / 6).astype(int)
+    assert auroc(y, length) > 0.6
+    assert matched_auroc(y, length, length.astype(str))[0] == pytest.approx(0.5)
