@@ -589,6 +589,8 @@ def reused_throughput(path: Path, config: ChunkConfig) -> dict[str, object]:
 def run(
     profile: Profile, out_path: Path, argv: Sequence[str], reuse_throughput: Path | None = None
 ) -> dict[str, object]:
+    # Read before anything else so the recorded commit is the code that produced the numbers.
+    provenance = git_state()
     timings: dict[str, float] = {}
     stage = time.perf_counter()
 
@@ -746,7 +748,7 @@ def run(
         "profile_settings": {k: v for k, v in asdict(profile).items() if k != "grid"},
         "date": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "command": "uv run python -m bench.run " + " ".join(argv),
-        **git_state(),
+        **provenance,
         "machine": machine_info(),
         "dataset": {
             "name": "RAGTruth",

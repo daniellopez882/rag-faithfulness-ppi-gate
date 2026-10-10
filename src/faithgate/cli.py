@@ -52,9 +52,9 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 def _make_judge(args: argparse.Namespace) -> Judge:
     if args.judge == "overlap":
-        return OverlapJudge(
-            span_threshold=args.span_threshold if args.span_threshold is not None else 0.25
-        )
+        if args.span_threshold is None:
+            return OverlapJudge()
+        return OverlapJudge(span_threshold=args.span_threshold)
     if args.judge == "always-hallucinated":
         return AlwaysHallucinatedJudge()
     if args.judge == "llm":
@@ -75,13 +75,12 @@ def _make_judge(args: argparse.Namespace) -> Judge:
         )
     else:
         aggregation = args.judge.removeprefix("nli-")
-    return NLIJudge(
-        load_default_nli(threads=args.threads),
-        config,
-        aggregation,
-        span_threshold=args.span_threshold if args.span_threshold is not None else 0.5,
-        keep_matrix=args.keep_matrix,
+    judge = NLIJudge(
+        load_default_nli(threads=args.threads), config, aggregation, keep_matrix=args.keep_matrix
     )
+    if args.span_threshold is not None:
+        judge.span_threshold = args.span_threshold
+    return judge
 
 
 def _cmd_score(args: argparse.Namespace) -> int:
@@ -175,7 +174,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--chunk-words", type=int, default=25)
     p.add_argument("--overlap", type=int, default=1)
     p.add_argument("--conv", type=Path, default=None, help="trained SummaC-Conv parameters")
-    p.add_argument("--span-threshold", type=float, default=None)
+    p.add_argument(
+        "--span-threshold",
+        type=float,
+        default=None,
+        help="unit score at which a unit yields spans (default 0.6, tuned on RAGTruth train for "
+        "overlap and nli-zs-mean)",
+    )
     p.add_argument("--keep-matrix", action="store_true", help="store NLI rows for train-conv")
     p.add_argument("--threads", type=int, default=None)
     p.add_argument(

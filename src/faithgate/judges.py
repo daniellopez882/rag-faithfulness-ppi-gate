@@ -56,7 +56,8 @@ class OverlapJudge:
 
     name = "overlap"
 
-    def __init__(self, span_threshold: float = 0.25) -> None:
+    # 0.6 maximised span F1 on the RAGTruth train slice (bench/results/full.json, "spans").
+    def __init__(self, span_threshold: float = 0.6) -> None:
         self.span_threshold = span_threshold
 
     def score(self, records: Sequence[Record]) -> list[Scored]:
@@ -96,7 +97,8 @@ class NLIJudge:
     :class:`ConvAggregator`.
 
     Spans: units whose hallucination score is at least ``span_threshold``, narrowed to source-absent
-    words when ``refine_spans`` is set.
+    words when ``refine_spans`` is set. The default 0.6 is the value tuned on RAGTruth train for
+    ``zs-mean`` with narrowing; other aggregations put unit scores on other scales.
     """
 
     def __init__(
@@ -105,7 +107,7 @@ class NLIJudge:
         config: ChunkConfig,
         aggregation: str | ConvAggregator = "zs-min",
         *,
-        span_threshold: float = 0.5,
+        span_threshold: float = 0.6,
         refine_spans: bool = True,
         keep_matrix: bool = False,
         batch_records: int = 32,
