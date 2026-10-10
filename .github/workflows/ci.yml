@@ -40,13 +40,14 @@ jobs:
         run: |
           uv run faithgate score examples/calibration.jsonl --judge overlap -o examples/out/calibration-scores.jsonl
           uv run faithgate calibrate examples/out/calibration-scores.jsonl --method platt --alpha 0.2 -o examples/out/calibration.json
-      - name: score and gate
+      # The report is written before the gate so it exists when the gate fails the job.
+      - name: score and report
         run: |
           uv run faithgate score examples/outputs.jsonl --judge overlap -o examples/out/scores.jsonl
-          cd examples && uv run pytest --rag-gate rag-gate.toml -p no:cacheprovider
-      - name: report
-        if: always()
-        run: uv run faithgate report examples/out/scores.jsonl --calibration examples/out/calibration.json --out-dir examples/out/report
+          uv run faithgate report examples/out/scores.jsonl --calibration examples/out/calibration.json --out-dir examples/out/report
+      - name: gate
+        working-directory: examples
+        run: uv run pytest --rag-gate rag-gate.toml -p no:cacheprovider
       - uses: actions/upload-artifact@v4
         if: always()
         with:
