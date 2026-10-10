@@ -128,8 +128,8 @@ this repo>`):
 
 ```yaml
 - run: uv run faithgate score outputs.jsonl --judge overlap -o scores.jsonl
-- run: uv run pytest --rag-gate rag-gate.toml
 - run: uv run faithgate report scores.jsonl --calibration calibration.json --out-dir rag-report
+- run: uv run pytest --rag-gate rag-gate.toml
 ```
 
 and next to it a `rag-gate.toml`:
@@ -161,10 +161,10 @@ rate (ppi++, lambda 0.65): estimate 0.245, 90% upper bound 0.444, budget 0.600 -
 ```
 
 The second line counts the responses at or above the CRC flag threshold. They do not fail the
-build by default. With the judges measured below, holding the slip risk at the `calibrate`
-default of alpha 0.10 flags 0.713 of RAGTruth test responses, so one failing item per flag would
-fail nearly every build. The report from the third workflow line lists them, highest probability
-first, as a review queue; `per_response = true` turns each into a failing test item. With fewer
+build by default. With the primary NLI judge measured below, holding the slip risk at the
+`calibrate` default of alpha 0.10 flags 0.713 of RAGTruth test responses, so one failing item per
+flag would fail nearly every build. The report, written before the gate runs so it exists when the
+gate fails, lists them highest probability first as a review queue; `per_response = true` turns each into a failing test item. With fewer
 than `min_labelled` labels there is no bound, and `rag_gate_rate` fails unless `too_few_labels =
 "skip"`, which leaves the build green without any rate check. `-k rag_gate_rate` selects the gate
 alone, and without `--rag-gate` the plugin adds nothing.
