@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 TASKS = ("QA", "Summary", "Data2txt")
+SHOWN = {"length": "length (unit count, no model)"}
 
 
 def _f(value: Any, digits: int = 3) -> str:
@@ -32,27 +33,39 @@ def measured_on(r: dict[str, Any]) -> str:
     )
 
 
-def judges_table(r: dict[str, Any]) -> str:
+def _ci(m: dict[str, Any], key: str) -> str:
+    ci = m[f"{key}_ci95"]
+    return f"{_f(m[key])} [{_f(ci['lower'])}, {_f(ci['upper'])}]"
+
+
+def ranking_table(r: dict[str, Any]) -> str:
+    rows = [
+        [SHOWN.get(name, name), _ci(m, "auroc"), _ci(m, "auroc_length_matched")]
+        for name, m in r["meta_eval"].items()
+    ]
+    return _table(["judge", "AUROC [95% CI]", "length-matched AUROC [95% CI]"], rows)
+
+
+def decisions_table(r: dict[str, Any]) -> str:
     rows = []
     for name, m in r["meta_eval"].items():
-        ci = m["auroc_ci95"]
+        raw = m["uncalibrated_at_0.5"]
         iso = m["calibrated"].get("isotonic")
+        brier = _f(m["brier_raw"]) if m["brier_raw"] is not None else "n/a"
         rows.append(
             [
-                name,
-                f"{_f(m['auroc'])} [{_f(ci['lower'])}, {_f(ci['upper'])}]",
-                _f(m["uncalibrated_at_0.5"]["f1"]),
+                SHOWN.get(name, name),
+                _f(raw["f1"]) if raw else "n/a",
                 _f(m["at_tuned_threshold"]["precision"]),
                 _f(m["at_tuned_threshold"]["recall"]),
                 _f(m["at_tuned_threshold"]["f1"]),
                 _f(m["ece_raw"]),
                 _f(iso["ece"]) if iso else "n/a",
-                f"{_f(m['brier_raw'])} -> {_f(iso['brier'])}" if iso else _f(m["brier_raw"]),
+                f"{brier} -> {_f(iso['brier'])}" if iso else brier,
             ]
         )
     header = [
         "judge",
-        "AUROC [95% CI]",
         "F1 raw@0.5",
         "P tuned",
         "R tuned",
@@ -62,6 +75,14 @@ def judges_table(r: dict[str, Any]) -> str:
         "Brier raw -> isotonic",
     ]
     return _table(header, rows)
+
+
+def dev_table(r: dict[str, Any]) -> str:
+    rows = [
+        [name, _f(auc), _f(r["dev_auroc_length_matched"][name])]
+        for name, auc in r["dev_auroc"].items()
+    ]
+    return _table(["NLI judge", "dev AUROC", "dev length-matched AUROC"], rows)
 
 
 def calibration_table(r: dict[str, Any], judge: str) -> str:
@@ -93,6 +114,7 @@ def calibration_table(r: dict[str, Any], judge: str) -> str:
 def per_task_table(r: dict[str, Any], judge: str) -> str:
     m = r["meta_eval"][judge]
     overlap = r["meta_eval"]["overlap"]
+    length = r["meta_eval"]["length"]
     rows = []
     for task in TASKS:
         t = m["per_task"].get(task)
@@ -103,9 +125,10 @@ def per_task_table(r: dict[str, Any], judge: str) -> str:
                 task,
                 str(t["n"]),
                 _f(t["positive_rate"]),
-                _f(t["auroc"]),
-                _f(overlap["per_task"][task]["auroc"]),
-                _f(t["f1_at_tuned_threshold"]),
+                _f(length["per_task"][task]["auroc"]),
+                f"{_f(t['auroc'])} / {_f(t['auroc_length_matched'])}",
+                f"{_f(overlap['per_task'][task]['auroc'])} / "
+                f"{_f(overlap['per_task'][task]['auroc_length_matched'])}",
                 _f(t["ece_raw"]),
                 _f(t["ece_isotonic_global"]),
                 _f(m["isotonic_per_task"]["per_task"][task]["ece_isotonic_per_task"]),
@@ -115,9 +138,9 @@ def per_task_table(r: dict[str, Any], judge: str) -> str:
         "task",
         "n",
         "hallucinated share",
-        f"AUROC {judge}",
-        "AUROC overlap",
-        "F1 tuned",
+        "AUROC length",
+        f"AUROC / matched, {judge}",
+        "AUROC / matched, overlap",
         "ECE raw",
         "ECE isotonic (global)",
         "ECE isotonic (per task)",
@@ -152,14 +175,14 @@ def ppi_table(r: dict[str, Any], judge: str) -> str:
                     _f(s.get("mean_lambda"), 2) if "mean_lambda" in s else "",
                 ]
             )
-    nominal = 1 - ppi["alpha_two_sided"]
-    upper = 1 - ppi["alpha_upper"]
+    nominal = ppi["nominal_coverage_two_sided"]
+    upper = ppi["nominal_coverage_upper"]
     header = [
         "labelled n",
         "estimator",
         f"coverage (nominal {nominal:.2f})",
         "mean CI width",
-        f"upper-bound coverage (nominal {upper:.3f})",
+        f"upper-bound coverage (nominal {upper:.2f})",
         "mean lambda",
     ]
     return _table(header, rows)
@@ -215,6 +238,7 @@ def crc_table(r: dict[str, Any]) -> str:
 
 
 def throughput_table(r: dict[str, Any]) -> str:
+    """Timed by the run in ``throughput.measured_in`` when that key exists, else by this run."""
     t = r["throughput"]
     rows = [
         [
@@ -249,7 +273,9 @@ def main(argv: list[str]) -> int:
     sections = [
         ("Measured on", measured_on(results)),
         ("Chunking chosen on dev", chunk_table(results)),
-        ("Judges on RAGTruth test", judges_table(results)),
+        ("NLI judges on dev", dev_table(results)),
+        ("Ranking on RAGTruth test", ranking_table(results)),
+        ("Decisions and calibration on RAGTruth test", decisions_table(results)),
         (f"Calibration of {primary}", calibration_table(results, primary)),
         (f"Per task type, {primary}", per_task_table(results, primary)),
         ("Span localisation", spans_table(results)),
